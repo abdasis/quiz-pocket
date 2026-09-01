@@ -10,7 +10,9 @@ import {
   StatusBar,
   Dimensions,
   Platform,
+  Alert,
 } from 'react-native'
+import * as Updates from 'expo-updates'
 
 const API_BASE = 'https://quiz.abdasis.my.id/api/v1'
 
@@ -55,6 +57,30 @@ export default function App() {
   const [correctCount, setCorrectCount] = useState(0)
   const [questionTimer, setQuestionTimer] = useState(30)
   const [isFinished, setIsFinished] = useState(false)
+
+  // OTA Auto-Update Check on App Launch
+  useEffect(() => {
+    async function checkOTAUpdates() {
+      if (__DEV__) return
+      try {
+        const update = await Updates.checkForUpdateAsync()
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync()
+          Alert.alert(
+            'Update Tersedia',
+            'Versi terbaru kuis telah diunduh. Muat ulang sekarang untuk menerapkan perubahan?',
+            [
+              { text: 'Nanti', style: 'cancel' },
+              { text: 'Muat Ulang', onPress: () => Updates.reloadAsync() },
+            ]
+          )
+        }
+      } catch (e) {
+        console.log('OTA Check error:', e)
+      }
+    }
+    checkOTAUpdates()
+  }, [])
 
   // Fetch Live Slot & Leaderboard
   const loadData = async () => {
