@@ -177,9 +177,14 @@ func main() {
 		catIndex := int(slotID % int64(len(categories)))
 		activeCategory := categories[catIndex]
 
-		// Dynamic Question Count: 10, 15, or 20 based on slotID cycle
+		// Dynamic Pseudo-Random Question Count using Slot Hash (10, 15, or 20 secara acak/tidak berurutan)
+		h := sha256.New()
+		binary.Write(h, binary.BigEndian, slotID)
+		seedBytes := h.Sum(nil)
+
 		countOptions := []int{10, 15, 20}
-		targetCount := countOptions[int(slotID%int64(len(countOptions)))]
+		randomIndex := int(seedBytes[3]) % len(countOptions)
+		targetCount := countOptions[randomIndex]
 
 		// Fetch questions for this category (or cross categories if needed)
 		var allQuestions []Question
