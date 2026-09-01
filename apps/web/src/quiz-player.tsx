@@ -85,9 +85,8 @@ export function QuizPlayer({
         spread: 80,
         origin: { y: 0.6 },
       })
-      const finalScore = score + (selectedOption === currentQ.answer_index ? 0 : 0)
-      const finalCorrect = correctCount
-      onFinish(finalScore, questions.length * 10, finalCorrect)
+      const maxPoints = questions.reduce((acc, q) => acc + (q.points || 10), 0)
+      onFinish(score, maxPoints, correctCount)
     }
   }
 
