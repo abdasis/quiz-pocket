@@ -1,6 +1,6 @@
 import { X, Flame, BookOpen, Compass, GraduationCap, Award, Zap } from 'lucide-react'
 import type { AuthUser } from './app-header'
-import { getUserTitle } from './user-ranks'
+import { getUserTitle, getNextTitleProgress } from './user-ranks'
 
 interface StatsModalProps {
   isOpen: boolean
@@ -12,6 +12,7 @@ export function StatsModal({ isOpen, onClose, user }: StatsModalProps) {
   if (!isOpen || !user) return null
 
   const userTitle = getUserTitle(user.points || 0)
+  const rankProgress = getNextTitleProgress(user.points || 0)
 
   const sdTotal = user.sd_total || 0
   const sdCorrect = user.sd_correct || 0
@@ -87,16 +88,51 @@ export function StatsModal({ isOpen, onClose, user }: StatsModalProps) {
             </div>
           </div>
 
-          {/* Honor Title Banner */}
-          <div className={`p-3 rounded-xl border flex items-center justify-between ${userTitle.bgClass} ${userTitle.borderClass}`}>
-            <div className="flex items-center gap-2">
-              <Zap className={`w-4 h-4 ${userTitle.colorClass}`} />
-              <div>
-                <span className={`text-xs font-bold font-mono ${userTitle.colorClass}`}>Gelar: {userTitle.title}</span>
-                <p className="text-[11px] text-neutral-600 dark:text-neutral-400">{userTitle.description}</p>
+          {/* Honor Title Banner & Level Progress */}
+          <div className={`p-4 rounded-2xl border space-y-2.5 ${userTitle.bgClass} ${userTitle.borderClass}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl bg-white/80 dark:bg-black/40 flex items-center justify-center shadow-2xs">
+                  <Zap className={`w-4 h-4 ${userTitle.colorClass}`} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-black/5 dark:bg-white/10 text-neutral-500">
+                      Tier {userTitle.tier} / 10
+                    </span>
+                    <span className={`text-xs font-bold font-mono ${userTitle.colorClass}`}>
+                      {userTitle.title}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-0.5">{userTitle.description}</p>
+                </div>
               </div>
+              <span className="text-[10px] font-mono font-bold text-neutral-400">Min {userTitle.minPoints} pts</span>
             </div>
-            <span className="text-[10px] font-mono text-neutral-400">Min {userTitle.minPoints} pts</span>
+
+            {/* Next Tier Progress Bar */}
+            {rankProgress.nextTitle ? (
+              <div className="pt-2 border-t border-black/[0.05] dark:border-white/[0.05] space-y-1.5">
+                <div className="flex items-center justify-between text-[10px] font-mono">
+                  <span className="text-neutral-500">
+                    Menuju <strong className="text-neutral-800 dark:text-neutral-200">{rankProgress.nextTitle.title}</strong>
+                  </span>
+                  <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                    Kurang {rankProgress.pointsNeeded} Pts ({rankProgress.progressPercent}%)
+                  </span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                    style={{ width: `${rankProgress.progressPercent}%` }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="pt-1.5 border-t border-black/[0.05] dark:border-white/[0.05] text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                👑 Anda telah mencapai Gelar Tertinggi di Quiz Pocket!
+              </div>
+            )}
           </div>
         </div>
 
