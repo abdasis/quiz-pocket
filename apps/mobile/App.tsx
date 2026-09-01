@@ -477,11 +477,24 @@ function MainScreen() {
 
                     {selectedOpt !== currentQ.answer_index && (
                       <View style={{ marginBottom: 8, padding: 8, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.04)' }}>
-                        <Text style={{ fontSize: 11, color: colors.rose, marginBottom: 2 }}>
-                          Pilihan Anda: {selectedOpt !== null && selectedOpt >= 0 && currentQ.options[selectedOpt] ? `${String.fromCharCode(65 + selectedOpt)}. ${currentQ.options[selectedOpt]}` : 'Waktu Habis'}
+                        <Text style={{ fontSize: 11, color: colors.rose, fontWeight: '700', marginBottom: 2 }}>
+                          Pilihan Anda (Salah): {selectedOpt !== null && selectedOpt >= 0 && currentQ.options[selectedOpt] ? `${String.fromCharCode(65 + selectedOpt)}. ${currentQ.options[selectedOpt]}` : 'Waktu Habis'}
                         </Text>
-                        <Text style={{ fontSize: 11, color: colors.emerald, fontWeight: '700' }}>
+                        <Text style={{ fontSize: 10, color: colors.textMuted, marginBottom: 6 }}>
+                          Mengapa salah: {selectedOpt !== null && selectedOpt >= 0 && (currentQ as any).option_explanations && (currentQ as any).option_explanations[selectedOpt]
+                            ? (currentQ as any).option_explanations[selectedOpt]
+                            : selectedOpt !== null && selectedOpt >= 0
+                              ? `Pilihan ${currentQ.options[selectedOpt]} bukan jawaban yang tepat.`
+                              : 'Waktu habis.'}
+                        </Text>
+
+                        <Text style={{ fontSize: 11, color: colors.emerald, fontWeight: '700', marginBottom: 2 }}>
                           Jawaban Benar: {String.fromCharCode(65 + currentQ.answer_index)}. {currentQ.options[currentQ.answer_index]}
+                        </Text>
+                        <Text style={{ fontSize: 10, color: colors.textMuted }}>
+                          Alasan tepat: {(currentQ as any).option_explanations && (currentQ as any).option_explanations[currentQ.answer_index]
+                            ? (currentQ as any).option_explanations[currentQ.answer_index]
+                            : currentQ.explanation}
                         </Text>
                       </View>
                     )}

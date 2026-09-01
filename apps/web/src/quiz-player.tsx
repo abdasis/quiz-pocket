@@ -7,6 +7,7 @@ export interface Question {
   category_id: number
   question: string
   options: string[]
+  option_explanations?: string[]
   answer_index: number
   explanation: string
   level?: string
@@ -745,24 +746,42 @@ export function QuizPlayer({
 
             {/* Answer Comparison Details if Wrong */}
             {selectedOption !== currentQ.answer_index && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                <div className="p-3 rounded-xl bg-white/80 dark:bg-[#151518]/80 border border-rose-200/50 dark:border-rose-900/40 space-y-1">
-                  <span className="text-[10px] font-mono font-bold text-rose-500 uppercase tracking-wider">
-                    Jawaban Anda:
-                  </span>
-                  <p className="font-semibold text-rose-700 dark:text-rose-300">
-                    {selectedOption !== null && selectedOption >= 0 && currentQ.options[selectedOption]
-                      ? `${String.fromCharCode(65 + selectedOption)}. ${currentQ.options[selectedOption]}`
-                      : 'Waktu Habis / Tidak Memilih'}
+              <div className="space-y-2 text-xs">
+                <div className="p-3.5 rounded-xl bg-white/80 dark:bg-[#151518]/80 border border-rose-200/50 dark:border-rose-900/40 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono font-bold text-rose-500 uppercase tracking-wider">
+                      Pilihan Anda (Salah):
+                    </span>
+                    <span className="font-bold text-rose-600 dark:text-rose-400">
+                      {selectedOption !== null && selectedOption >= 0 && currentQ.options[selectedOption]
+                        ? `${String.fromCharCode(65 + selectedOption)}. ${currentQ.options[selectedOption]}`
+                        : 'Waktu Habis'}
+                    </span>
+                  </div>
+                  <p className="text-neutral-600 dark:text-neutral-400 text-[11px] leading-relaxed">
+                    <span className="font-semibold text-rose-600 dark:text-rose-400">Mengapa salah: </span>
+                    {selectedOption !== null && selectedOption >= 0 && currentQ.option_explanations && currentQ.option_explanations[selectedOption]
+                      ? currentQ.option_explanations[selectedOption]
+                      : selectedOption !== null && selectedOption >= 0
+                        ? `Pilihan ${currentQ.options[selectedOption]} bukan jawaban yang tepat untuk konteks pertanyaan ini.`
+                        : 'Waktu menjawab telah habis sebelum opsi dipilih.'}
                   </p>
                 </div>
 
-                <div className="p-3 rounded-xl bg-white/80 dark:bg-[#151518]/80 border border-emerald-200/50 dark:border-emerald-900/40 space-y-1">
-                  <span className="text-[10px] font-mono font-bold text-emerald-600 uppercase tracking-wider">
-                    Jawaban Benar Seharusnya:
-                  </span>
-                  <p className="font-semibold text-emerald-700 dark:text-emerald-300">
-                    {String.fromCharCode(65 + currentQ.answer_index)}. {currentQ.options[currentQ.answer_index]}
+                <div className="p-3.5 rounded-xl bg-white/80 dark:bg-[#151518]/80 border border-emerald-200/50 dark:border-emerald-900/40 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono font-bold text-emerald-600 uppercase tracking-wider">
+                      Jawaban Benar Seharusnya:
+                    </span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                      {String.fromCharCode(65 + currentQ.answer_index)}. {currentQ.options[currentQ.answer_index]}
+                    </span>
+                  </div>
+                  <p className="text-neutral-600 dark:text-neutral-400 text-[11px] leading-relaxed">
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">Alasan tepat: </span>
+                    {currentQ.option_explanations && currentQ.option_explanations[currentQ.answer_index]
+                      ? currentQ.option_explanations[currentQ.answer_index]
+                      : currentQ.explanation}
                   </p>
                 </div>
               </div>

@@ -54,17 +54,19 @@ type Category struct {
 }
 
 type Question struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	CategoryID  uint      `gorm:"index;not null" json:"category_id"`
-	Category    Category  `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
-	Question    string    `gorm:"not null" json:"question"`
-	Options     string    `gorm:"type:text;not null" json:"-"`
-	OptionsList []string  `gorm:"-" json:"options"`
-	AnswerIndex int       `json:"answer_index"`
-	Explanation string    `json:"explanation"`
-	Level       string    `json:"level"` // "SD", "SMP", "SMA"
-	Points      int       `json:"points"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID                 uint      `gorm:"primaryKey" json:"id"`
+	CategoryID         uint      `gorm:"index;not null" json:"category_id"`
+	Category           Category  `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
+	Question           string    `gorm:"not null" json:"question"`
+	Options            string    `gorm:"type:text;not null" json:"-"`
+	OptionsList        []string  `gorm:"-" json:"options"`
+	OptionExplanations string    `gorm:"type:text" json:"-"`
+	OptionExplanationsList []string `gorm:"-" json:"option_explanations"`
+	AnswerIndex        int       `json:"answer_index"`
+	Explanation        string    `json:"explanation"`
+	Level              string    `json:"level"` // "SD", "SMP", "SMA"
+	Points             int       `json:"points"`
+	CreatedAt          time.Time `json:"created_at"`
 }
 
 // QuizSession: Menyimpan snapshot soal yang aktif dan metadata sesi per 30 menit
@@ -177,6 +179,12 @@ func getLiveSlotQuestions(db *gorm.DB) []Question {
 			var opts []string
 			if err := json.Unmarshal([]byte(q.Options), &opts); err == nil {
 				q.OptionsList = opts
+			}
+			if q.OptionExplanations != "" {
+				var expList []string
+				if err := json.Unmarshal([]byte(q.OptionExplanations), &expList); err == nil {
+					q.OptionExplanationsList = expList
+				}
 			}
 			slotQuestions = append(slotQuestions, q)
 		}
@@ -413,6 +421,12 @@ func main() {
 				if err := json.Unmarshal([]byte(q.Options), &opts); err == nil {
 					q.OptionsList = opts
 				}
+				if q.OptionExplanations != "" {
+					var expList []string
+					if err := json.Unmarshal([]byte(q.OptionExplanations), &expList); err == nil {
+						q.OptionExplanationsList = expList
+					}
+				}
 				slotQuestions = append(slotQuestions, q)
 				questionIDs = append(questionIDs, q.ID)
 			}
@@ -512,6 +526,12 @@ func main() {
 			var opts []string
 			if err := json.Unmarshal([]byte(questions[i].Options), &opts); err == nil {
 				questions[i].OptionsList = opts
+			}
+			if questions[i].OptionExplanations != "" {
+				var expList []string
+				if err := json.Unmarshal([]byte(questions[i].OptionExplanations), &expList); err == nil {
+					questions[i].OptionExplanationsList = expList
+				}
 			}
 		}
 		return c.JSON(fiber.Map{

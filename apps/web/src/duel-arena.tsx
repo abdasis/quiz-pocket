@@ -10,6 +10,7 @@ interface Question {
   id: number
   question: string
   options: string[]
+  option_explanations?: string[]
   answer_index: number
   explanation: string
   level?: string
@@ -399,21 +400,39 @@ export function DuelArena({
 
                 {/* Wrong answer comparison */}
                 {selectedOption !== currentQ.answer_index && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    <div className="p-2.5 rounded-xl bg-white/80 dark:bg-[#18181c] border border-rose-200/50 dark:border-rose-900/40">
-                      <span className="text-[10px] font-mono text-rose-500 font-bold block">Pilihan Anda:</span>
-                      <span className="font-semibold text-rose-700 dark:text-rose-300">
-                        {selectedOption !== null && selectedOption >= 0 && currentQ.options[selectedOption]
-                          ? `${String.fromCharCode(65 + selectedOption)}. ${currentQ.options[selectedOption]}`
-                          : 'Waktu Habis / Tidak Memilih'}
-                      </span>
+                  <div className="space-y-2 text-xs">
+                    <div className="p-3 rounded-xl bg-white/80 dark:bg-[#18181c] border border-rose-200/50 dark:border-rose-900/40 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono text-rose-500 font-bold">Pilihan Anda:</span>
+                        <span className="font-bold text-rose-700 dark:text-rose-300">
+                          {selectedOption !== null && selectedOption >= 0 && currentQ.options[selectedOption]
+                            ? `${String.fromCharCode(65 + selectedOption)}. ${currentQ.options[selectedOption]}`
+                            : 'Waktu Habis'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                        <span className="font-semibold text-rose-600 dark:text-rose-400">Mengapa salah: </span>
+                        {selectedOption !== null && selectedOption >= 0 && currentQ.option_explanations && currentQ.option_explanations[selectedOption]
+                          ? currentQ.option_explanations[selectedOption]
+                          : selectedOption !== null && selectedOption >= 0
+                            ? `Pilihan ${currentQ.options[selectedOption]} bukan jawaban tepat untuk pertanyaan ini.`
+                            : 'Waktu habis.'}
+                      </p>
                     </div>
 
-                    <div className="p-2.5 rounded-xl bg-white/80 dark:bg-[#18181c] border border-emerald-200/50 dark:border-emerald-900/40">
-                      <span className="text-[10px] font-mono text-emerald-600 font-bold block">Jawaban Benar:</span>
-                      <span className="font-semibold text-emerald-700 dark:text-emerald-300">
-                        {String.fromCharCode(65 + currentQ.answer_index)}. {currentQ.options[currentQ.answer_index]}
-                      </span>
+                    <div className="p-3 rounded-xl bg-white/80 dark:bg-[#18181c] border border-emerald-200/50 dark:border-emerald-900/40 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono text-emerald-600 font-bold">Jawaban Benar:</span>
+                        <span className="font-bold text-emerald-700 dark:text-emerald-300">
+                          {String.fromCharCode(65 + currentQ.answer_index)}. {currentQ.options[currentQ.answer_index]}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                        <span className="font-semibold text-emerald-600 dark:text-emerald-400">Alasan tepat: </span>
+                        {currentQ.option_explanations && currentQ.option_explanations[currentQ.answer_index]
+                          ? currentQ.option_explanations[currentQ.answer_index]
+                          : currentQ.explanation}
+                      </p>
                     </div>
                   </div>
                 )}
