@@ -252,14 +252,7 @@ export function App() {
             }}
           />
         ) : isArticlesMode ? (
-          <ArticlesView
-            onStartPracticeWithQuestions={(questions) => {
-              setPracticeQuestions(questions)
-              setIsPracticeMode(true)
-              setIsArticlesMode(false)
-              setIsPlaying(true)
-            }}
-          />
+          <ArticlesView />
         ) : isPlaying ? (
           <QuizPlayer
             questions={isPracticeMode ? practiceQuestions : (liveSlot?.questions || [])}

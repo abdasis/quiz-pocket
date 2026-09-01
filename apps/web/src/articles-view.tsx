@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
-import { BookOpen, Clock, ArrowRight, ChevronLeft, Zap, HelpCircle } from 'lucide-react'
+import { BookOpen, Clock, ArrowRight, ChevronLeft, Bookmark } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { Question } from './quiz-player'
 
 export interface ArticleItem {
   id: number
@@ -14,14 +13,9 @@ export interface ArticleItem {
   level: string
   read_time_minutes: number
   icon: string
-  questions?: Question[]
 }
 
-interface ArticlesViewProps {
-  onStartPracticeWithQuestions?: (questions: Question[], title: string) => void
-}
-
-export function ArticlesView({ onStartPracticeWithQuestions }: ArticlesViewProps) {
+export function ArticlesView() {
   const [articles, setArticles] = useState<ArticleItem[]>([])
   const [selectedArticle, setSelectedArticle] = useState<ArticleItem | null>(null)
   const [, setIsLoading] = useState(true)
@@ -61,22 +55,28 @@ export function ArticlesView({ onStartPracticeWithQuestions }: ArticlesViewProps
     }
   }
 
+  const currentIndex = selectedArticle 
+    ? articles.findIndex(a => a.id === selectedArticle.id) 
+    : -1
+
+  const prevArticle = currentIndex > 0 ? articles[currentIndex - 1] : null
+  const nextArticle = currentIndex >= 0 && currentIndex < articles.length - 1 ? articles[currentIndex + 1] : null
+
   const filteredArticles = selectedLevel === 'ALL' 
     ? articles 
     : articles.filter(a => a.level === selectedLevel)
 
   if (selectedArticle) {
-    const questions = selectedArticle.questions || []
     return (
-      <div className="space-y-6 animate-in fade-in duration-200">
-        {/* Top Navigation */}
-        <div className="flex items-center justify-between">
+      <div className="space-y-6 animate-in fade-in duration-200 max-w-3xl mx-auto">
+        {/* Top Book Navigation Header */}
+        <div className="flex items-center justify-between pb-2 border-b border-black/[0.04] dark:border-white/[0.04]">
           <button
             onClick={() => setSelectedArticle(null)}
             className="pressable inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl border border-black/[0.06] dark:border-white/[0.08] bg-white/70 dark:bg-neutral-900/70 text-xs font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
           >
             <ChevronLeft className="w-4 h-4" />
-            Kembali ke Daftar Artikel
+            Daftar Bab & Buku
           </button>
           
           <div className="flex items-center gap-2">
@@ -85,56 +85,59 @@ export function ArticlesView({ onStartPracticeWithQuestions }: ArticlesViewProps
             </span>
             <span className="text-[11px] font-mono text-neutral-400 flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" />
-              {selectedArticle.read_time_minutes} menit baca
+              {selectedArticle.read_time_minutes} mnt baca
             </span>
           </div>
         </div>
 
-        {/* Article Reading Card */}
-        <div className="p-6 sm:p-8 rounded-3xl bg-white/80 dark:bg-[#090a0f]/80 backdrop-blur-2xl border border-black/[0.06] dark:border-white/[0.08] shadow-2xs space-y-6">
-          <div className="space-y-2.5 border-b border-black/[0.06] dark:border-white/[0.08] pb-5">
-            <span className="text-xs font-mono font-bold text-neutral-400 uppercase tracking-wider">
-              {selectedArticle.category}
-            </span>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-900 dark:text-white leading-snug">
+        {/* Book Chapter Sheet (Reading View) */}
+        <article className="p-6 sm:p-10 rounded-3xl bg-white/90 dark:bg-[#0c0d12]/90 backdrop-blur-2xl border border-black/[0.06] dark:border-white/[0.08] shadow-2xs space-y-8">
+          
+          {/* Chapter Heading */}
+          <div className="space-y-3 text-center sm:text-left border-b border-black/[0.06] dark:border-white/[0.08] pb-6">
+            <div className="inline-flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wider text-neutral-400">
+              <Bookmark className="w-3.5 h-3.5 text-indigo-500" />
+              {selectedArticle.category} · Bab {currentIndex + 1}
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-950 dark:text-white leading-tight">
               {selectedArticle.title}
             </h1>
-            <p className="text-sm text-neutral-600 dark:text-neutral-400 italic leading-relaxed">
+            <p className="text-sm sm:text-base text-neutral-600 dark:text-neutral-400 italic leading-relaxed pt-1">
               "{selectedArticle.summary}"
             </p>
           </div>
 
-          {/* Article ReactMarkdown Body with Apple HIG styling */}
-          <div className="text-sm sm:text-base leading-relaxed text-neutral-800 dark:text-neutral-200 space-y-4">
+          {/* Book Content Typography */}
+          <div className="text-neutral-800 dark:text-neutral-200 leading-relaxed space-y-5 text-[15px] sm:text-base">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
                 h1: ({ ...props }) => (
-                  <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 dark:text-white mt-6 mb-3 tracking-tight" {...props} />
+                  <h2 className="text-xl sm:text-2xl font-bold text-neutral-950 dark:text-white mt-8 mb-3 tracking-tight border-b border-black/[0.04] dark:border-white/[0.04] pb-2" {...props} />
                 ),
                 h2: ({ ...props }) => (
-                  <h2 className="text-lg sm:text-xl font-bold text-neutral-900 dark:text-white mt-6 mb-2 tracking-tight" {...props} />
+                  <h3 className="text-lg sm:text-xl font-bold text-neutral-950 dark:text-white mt-7 mb-2 tracking-tight" {...props} />
                 ),
                 h3: ({ ...props }) => (
-                  <h3 className="text-base sm:text-lg font-bold text-neutral-900 dark:text-white mt-5 mb-2 tracking-tight" {...props} />
+                  <h4 className="text-base sm:text-lg font-bold text-neutral-950 dark:text-white mt-6 mb-2 tracking-tight" {...props} />
                 ),
                 p: ({ ...props }) => (
-                  <p className="text-sm sm:text-[15px] leading-relaxed text-neutral-700 dark:text-neutral-300 my-3" {...props} />
+                  <p className="text-sm sm:text-[15px] leading-relaxed text-neutral-700 dark:text-neutral-300 my-3.5 text-justify sm:text-left" {...props} />
                 ),
                 ul: ({ ...props }) => (
-                  <ul className="list-disc pl-5 my-3 space-y-1.5 text-sm sm:text-[15px] text-neutral-700 dark:text-neutral-300" {...props} />
+                  <ul className="list-disc pl-5 my-3.5 space-y-2 text-sm sm:text-[15px] text-neutral-700 dark:text-neutral-300" {...props} />
                 ),
                 ol: ({ ...props }) => (
-                  <ol className="list-decimal pl-5 my-3 space-y-1.5 text-sm sm:text-[15px] text-neutral-700 dark:text-neutral-300" {...props} />
+                  <ol className="list-decimal pl-5 my-3.5 space-y-2 text-sm sm:text-[15px] text-neutral-700 dark:text-neutral-300" {...props} />
                 ),
                 li: ({ ...props }) => (
                   <li className="leading-relaxed" {...props} />
                 ),
                 strong: ({ ...props }) => (
-                  <strong className="font-bold text-neutral-900 dark:text-white" {...props} />
+                  <strong className="font-bold text-neutral-950 dark:text-white" {...props} />
                 ),
                 blockquote: ({ ...props }) => (
-                  <blockquote className="border-l-2 border-indigo-500 pl-4 py-1 italic my-3 text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/40 rounded-r-xl" {...props} />
+                  <blockquote className="border-l-2 border-indigo-500 pl-4 py-2 italic my-4 text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/50 rounded-r-2xl text-sm" {...props} />
                 ),
                 code: ({ ...props }) => (
                   <code className="px-1.5 py-0.5 rounded-md font-mono text-xs bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-black/[0.04] dark:border-white/[0.06]" {...props} />
@@ -145,60 +148,35 @@ export function ArticlesView({ onStartPracticeWithQuestions }: ArticlesViewProps
             </ReactMarkdown>
           </div>
 
-          {/* Uji Pemahaman: Soal Kuis Terkait Artikel */}
-          <div className="pt-6 border-t border-black/[0.06] dark:border-white/[0.08] space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/60 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
-                  <HelpCircle className="w-4 h-4" />
-                </div>
+          {/* Book Bottom Navigation (Next / Previous Chapter) */}
+          <div className="pt-8 border-t border-black/[0.06] dark:border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-4">
+            {prevArticle ? (
+              <button
+                onClick={() => handleOpenArticle(prevArticle.slug)}
+                className="pressable w-full sm:w-auto p-3.5 rounded-2xl border border-black/[0.06] dark:border-white/[0.08] bg-neutral-50/70 dark:bg-neutral-900/50 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition flex items-center gap-3 text-left"
+              >
+                <ChevronLeft className="w-5 h-5 text-neutral-400 shrink-0" />
                 <div>
-                  <h4 className="text-sm font-bold text-neutral-900 dark:text-white">
-                    Uji Pemahaman Artikel ({questions.length} Butir Soal Terkait)
-                  </h4>
-                  <p className="text-xs text-neutral-500">
-                    Asah daya serap bacaan dengan mengerjakan butir soal yang diangkat dari konsep artikel ini.
-                  </p>
+                  <span className="text-[10px] font-mono font-bold uppercase text-neutral-400 block">Bab Sebelumnya</span>
+                  <span className="text-xs font-bold text-neutral-800 dark:text-neutral-200 line-clamp-1 max-w-[200px]">{prevArticle.title}</span>
                 </div>
-              </div>
+              </button>
+            ) : <div className="hidden sm:block" />}
 
-              {onStartPracticeWithQuestions && questions.length > 0 && (
-                <button
-                  onClick={() => onStartPracticeWithQuestions(questions, `Uji Pemahaman: ${selectedArticle.title}`)}
-                  className="pressable inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-100 text-white dark:text-neutral-900 text-xs font-bold transition shadow-xs self-start sm:self-auto shrink-0"
-                >
-                  <Zap className="w-3.5 h-3.5 text-amber-400" />
-                  Mulai Kuis Artikel Ini
-                </button>
-              )}
-            </div>
-
-            {/* List Preview Soal Terkait */}
-            <div className="grid grid-cols-1 gap-2.5 pt-2">
-              {questions.slice(0, 4).map((q, qIdx) => (
-                <div
-                  key={q.id || qIdx}
-                  className="p-3.5 rounded-2xl border border-black/[0.04] dark:border-white/[0.06] bg-neutral-50/70 dark:bg-neutral-900/50 flex items-start gap-3"
-                >
-                  <span className="w-5 h-5 rounded-lg bg-neutral-200 dark:bg-neutral-800 text-[11px] font-mono font-bold flex items-center justify-center text-neutral-600 dark:text-neutral-400 shrink-0">
-                    {qIdx + 1}
-                  </span>
-                  <div className="flex-1 space-y-1">
-                    <p className="text-xs sm:text-sm font-medium text-neutral-800 dark:text-neutral-200">
-                      {q.question}
-                    </p>
-                    <div className="flex items-center gap-2 text-[10px] font-mono text-neutral-400">
-                      <span className="px-1.5 py-0.2 rounded bg-black/[0.04] dark:bg-white/[0.06]">
-                        {q.level}
-                      </span>
-                      <span>+{q.points} Pts</span>
-                    </div>
-                  </div>
+            {nextArticle && (
+              <button
+                onClick={() => handleOpenArticle(nextArticle.slug)}
+                className="pressable w-full sm:w-auto p-3.5 rounded-2xl border border-black/[0.06] dark:border-white/[0.08] bg-neutral-50/70 dark:bg-neutral-900/50 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition flex items-center justify-between gap-3 text-right"
+              >
+                <div>
+                  <span className="text-[10px] font-mono font-bold uppercase text-indigo-500 block">Bab Selanjutnya</span>
+                  <span className="text-xs font-bold text-neutral-800 dark:text-neutral-200 line-clamp-1 max-w-[200px]">{nextArticle.title}</span>
                 </div>
-              ))}
-            </div>
+                <ArrowRight className="w-5 h-5 text-indigo-500 shrink-0" />
+              </button>
+            )}
           </div>
-        </div>
+        </article>
       </div>
     )
   }
@@ -210,13 +188,13 @@ export function ArticlesView({ onStartPracticeWithQuestions }: ArticlesViewProps
         <div className="space-y-1">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/60 dark:border-emerald-800/40 text-emerald-600 dark:text-emerald-400 text-[11px] font-mono font-bold">
             <BookOpen className="w-3.5 h-3.5" />
-            Modul Wawasan & Literasi
+            Buku Wawasan & Sains
           </div>
           <h2 className="text-lg sm:text-xl font-bold tracking-tight text-neutral-900 dark:text-white">
-            Artikel Sains, Logika & Pengetahuan Terpadu
+            Pustaka Literasi Sains, Logika & Pengetahuan
           </h2>
           <p className="text-xs sm:text-sm text-neutral-500 max-w-xl">
-            Tingkatkan pemahaman konsep dengan membaca artikel terstruktur, lalu uji langsung nalar Anda pada butir-butir soal yang relevan.
+            Buku wawasan digital terpadu untuk memperkaya literasi, sains alam, sejarah kebangsaan, dan logika berpikir.
           </p>
         </div>
 
@@ -238,9 +216,9 @@ export function ArticlesView({ onStartPracticeWithQuestions }: ArticlesViewProps
         </div>
       </div>
 
-      {/* Grid of Articles */}
+      {/* Grid of Book Chapters */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {filteredArticles.map((art) => (
+        {filteredArticles.map((art, idx) => (
           <div
             key={art.id}
             onClick={() => handleOpenArticle(art.slug)}
@@ -249,7 +227,7 @@ export function ArticlesView({ onStartPracticeWithQuestions }: ArticlesViewProps
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-mono font-bold text-neutral-400 uppercase tracking-wider">
-                  {art.category}
+                  Bab {idx + 1} · {art.category}
                 </span>
                 <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-black/[0.04] dark:border-white/[0.06]">
                   {art.level}
@@ -266,10 +244,10 @@ export function ArticlesView({ onStartPracticeWithQuestions }: ArticlesViewProps
             <div className="pt-3 border-t border-black/[0.04] dark:border-white/[0.06] flex items-center justify-between text-xs font-semibold text-neutral-500">
               <span className="flex items-center gap-1 text-[11px] font-mono text-neutral-400">
                 <Clock className="w-3.5 h-3.5" />
-                {art.read_time_minutes} menit baca
+                {art.read_time_minutes} mnt baca
               </span>
               <span className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-bold group-hover:translate-x-0.5 transition">
-                Baca & Latihan <ArrowRight className="w-3.5 h-3.5" />
+                Buka Bab <ArrowRight className="w-3.5 h-3.5" />
               </span>
             </div>
           </div>
