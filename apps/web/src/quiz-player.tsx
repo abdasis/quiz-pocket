@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { ArrowRight, RotateCcw, Award, Clock, Sparkles, Check, X, ArrowLeft } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { ArrowRight, RotateCcw, Award, Clock, Sparkles, Check, X, ArrowLeft, ShieldAlert, AlertTriangle } from 'lucide-react'
 import confetti from 'canvas-confetti'
 
 export interface Question {
@@ -36,12 +36,81 @@ export function QuizPlayer({
   const [secondsLeft, setSecondsLeft] = useState(30)
   const [isCompleted, setIsCompleted] = useState(false)
 
+  // Anti-Cheat States
+  const [tabSwitches, setTabSwitches] = useState(0)
+  const [showWarning, setShowWarning] = useState<string | null>(null)
+  const [isDisqualified, setIsDisqualified] = useState(false)
+  const isCompletedRef = useRef(false)
+  isCompletedRef.current = isCompleted
+
   const currentQ = questions[currentIndex]
   const progressPercent = Math.round(((currentIndex + 1) / questions.length) * 100)
 
+  // 1. Anti-Cheat: Visibility Change & Blur Detection (Tab Switch / Window Switch)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && !isCompletedRef.current && !isDisqualified) {
+        setTabSwitches((prev) => {
+          const nextCount = prev + 1
+          if (nextCount >= 3) {
+            setIsDisqualified(true)
+          } else {
+            setShowWarning(`Peringatan: Berpindah tab/aplikasi terdeteksi! (${nextCount}/3). Kuis akan didiskualifikasi jika mengulang lagi.`)
+          }
+          return nextCount
+        })
+      }
+    }
+
+    const handleWindowBlur = () => {
+      if (!isCompletedRef.current && !isDisqualified) {
+        setTabSwitches((prev) => {
+          const nextCount = prev + 1
+          if (nextCount >= 3) {
+            setIsDisqualified(true)
+          } else {
+            setShowWarning(`Fokus ujian hilang. Jangan berpindah jendela/aplikasi! (${nextCount}/3).`)
+          }
+          return nextCount
+        })
+      }
+    }
+
+    // 2. Anti-Cheat: Disable Context Menu (Right Click) & Copy Key Combinations
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault()
+      setShowWarning('Tindakan klik kanan / inspect dinonaktifkan demi integritas ujian.')
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey || e.metaKey) && 
+        ['c', 'C', 'u', 'U', 's', 'S', 'a', 'A'].includes(e.key)
+      ) {
+        e.preventDefault()
+        setShowWarning('Menyalin teks pertanyaan/jawaban dinonaktifkan.')
+      }
+      if (e.key === 'F12') {
+        e.preventDefault()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('blur', handleWindowBlur)
+    window.addEventListener('contextmenu', handleContextMenu)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('blur', handleWindowBlur)
+      window.removeEventListener('contextmenu', handleContextMenu)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isDisqualified])
+
   // Countdown timer per question
   useEffect(() => {
-    if (isAnswered || isCompleted) return
+    if (isAnswered || isCompleted || isDisqualified) return
 
     const timer = setInterval(() => {
       setSecondsLeft((prev) => {
@@ -55,14 +124,14 @@ export function QuizPlayer({
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [currentIndex, isAnswered, isCompleted])
+  }, [currentIndex, isAnswered, isCompleted, isDisqualified])
 
   const handleTimeOut = () => {
     setIsAnswered(true)
   }
 
   const handleSelectOption = (idx: number) => {
-    if (isAnswered) return
+    if (isAnswered || isDisqualified) return
     setSelectedOption(idx)
     setIsAnswered(true)
 
@@ -98,6 +167,41 @@ export function QuizPlayer({
     setCorrectCount(0)
     setSecondsLeft(30)
     setIsCompleted(false)
+    setIsDisqualified(false)
+    setTabSwitches(0)
+    setShowWarning(null)
+  }
+
+  // State: Disqualified
+  if (isDisqualified) {
+    return (
+      <div className="w-full max-w-4xl mx-auto py-6 animate-in fade-in zoom-in-95 duration-200">
+        <div className="bg-white dark:bg-[#111114] rounded-3xl border border-rose-500/20 dark:border-rose-500/20 p-8 sm:p-12 text-center space-y-6">
+          <div className="w-20 h-20 mx-auto rounded-3xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200/60 dark:border-rose-800/40 flex items-center justify-center text-rose-500">
+            <ShieldAlert className="w-10 h-10" />
+          </div>
+
+          <div className="space-y-2 max-w-md mx-auto">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-rose-600 dark:text-rose-400">
+              Sesi Didiskualifikasi
+            </h2>
+            <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
+              Terdeteksi berpindah jendela/tab lebih dari batas yang diperbolehkan demi menjaga integritas dan kejujuran kuis. Poin sesi ini tidak dihitung.
+            </p>
+          </div>
+
+          <div className="pt-2 flex justify-center">
+            <button
+              onClick={onExit}
+              className="h-12 px-6 rounded-2xl bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 font-semibold text-xs inline-flex items-center gap-2 cursor-pointer pressable"
+            >
+              <span>Kembali ke Beranda</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (isCompleted) {
@@ -116,7 +220,7 @@ export function QuizPlayer({
               Sesi Kuis Selesai!
             </h2>
             <p className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed font-normal">
-              Hasil dan akumulasi poin kamu telah berhasil dicatat ke sistem dan papan peringkat global.
+              Hasil dan akumulasi poin kamu telah berhasil dicatat ke sistem dan papan peringkat global secara valid.
             </p>
           </div>
 
@@ -167,7 +271,23 @@ export function QuizPlayer({
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-200">
+    <div className="w-full max-w-4xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-200 select-none">
+      {/* Anti-Cheat Toast Banner */}
+      {showWarning && (
+        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 text-xs flex items-center justify-between gap-3 animate-in slide-in-from-top duration-200">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+            <span className="font-medium">{showWarning}</span>
+          </div>
+          <button
+            onClick={() => setShowWarning(null)}
+            className="px-2 py-1 rounded-lg bg-amber-200/50 dark:bg-amber-800/50 hover:bg-amber-200 text-amber-900 dark:text-amber-100 text-[10px] font-bold cursor-pointer pressable"
+          >
+            Mengerti
+          </button>
+        </div>
+      )}
+
       {/* Comprehensive Exam Navigation & Status Bar */}
       <div className="p-5 rounded-3xl bg-white dark:bg-[#111114] border border-black/[0.06] dark:border-white/[0.08] space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -191,8 +311,15 @@ export function QuizPlayer({
             </div>
           </div>
 
-          {/* Right Metrics: Tier Badge + Question Points + Per-Question Countdown */}
-          <div className="flex items-center gap-2 self-end sm:self-auto">
+          {/* Right Metrics: Anti-Cheat Tab Status + Tier Badge + Question Countdown */}
+          <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
+            {tabSwitches > 0 && (
+              <span className="px-2.5 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-xs font-semibold border border-amber-200/60 dark:border-amber-800/40 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 text-amber-500" />
+                <span>Pelanggaran: {tabSwitches}/3</span>
+              </span>
+            )}
+
             <span className="px-2.5 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-semibold border border-indigo-200/60 dark:border-indigo-800/40">
               {currentQ.level ? `Tingkat ${currentQ.level}` : 'Umum'} · +{currentQ.points || 10} Pts
             </span>
@@ -260,7 +387,7 @@ export function QuizPlayer({
             return (
               <button
                 key={idx}
-                disabled={isAnswered}
+                disabled={isAnswered || isDisqualified}
                 onClick={() => handleSelectOption(idx)}
                 className={`w-full min-h-[56px] p-4 sm:px-5 rounded-2xl border text-left font-medium text-sm sm:text-base flex items-center justify-between gap-3.5 cursor-pointer pressable transition-all ${stateStyle}`}
               >
