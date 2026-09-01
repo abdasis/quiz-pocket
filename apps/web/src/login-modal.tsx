@@ -25,39 +25,34 @@ export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
     onCloseRef.current = onClose
   }, [onLoginSuccess, onClose])
 
-  // Custom Click Handler -> Trigger Native Google Identity Client
+  // Custom Click Handler -> Trigger Google OAuth2 Token Client Popup
   const handleCustomGoogleLogin = () => {
     setErrorMsg('')
     const google = window.google
-    if (!google?.accounts?.id) {
-      setErrorMsg('Google Sign-In SDK sedang dimuat, silakan coba beberapa saat lagi.')
+    if (!google?.accounts?.oauth2) {
+      setErrorMsg('Google SDK sedang disiapkan, silakan klik kembali.')
       return
     }
 
-    setIsLoading(true)
     try {
-      google.accounts.id.initialize({
+      setIsLoading(true)
+      const tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
-        callback: async (response: any) => {
-          try {
-            const base64Url = response.credential.split('.')[1]
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-            const jsonPayload = decodeURIComponent(
-              atob(base64)
-                .split('')
-                .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-                .join('')
-            )
-            const payload = JSON.parse(jsonPayload)
+        scope: 'email profile openid',
+        callback: async (tokenResponse: any) => {
+          if (tokenResponse.error) {
+            setIsLoading(false)
+            setErrorMsg('Gagal menghubungkan akun Google.')
+            return
+          }
 
+          try {
+            // Send token ke backend untuk sinkronisasi data profil
             const res = await fetch('/api/v1/auth/google-login', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                email: payload.email,
-                name: payload.name,
-                avatar_url: payload.picture,
-                google_id: payload.sub,
+                token: tokenResponse.access_token,
               }),
             })
             const json = await res.json()
@@ -65,28 +60,23 @@ export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
               onLoginSuccessRef.current(json.user || json.data)
               onCloseRef.current()
             } else {
-              setErrorMsg(json.error || 'Gagal autentikasi akun Google.')
+              setErrorMsg(json.error || 'Gagal memproses autentikasi profil.')
             }
           } catch (err) {
-            console.error('Google Auth Error:', err)
-            setErrorMsg('Gagal memproses data akun Google.')
+            console.error(err)
+            setErrorMsg('Gagal menghubungi server.')
           } finally {
             setIsLoading(false)
           }
         },
-        auto_select: false,
       })
 
-      // Prompt the native Google Sign-in popup directly
-      google.accounts.id.prompt((notification: any) => {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          setIsLoading(false)
-        }
-      })
+      // Membuka popup pilihan akun Google secara eksplisit & pasti muncul
+      tokenClient.requestAccessToken({ prompt: 'select_account' })
     } catch (err) {
-      console.error(err)
+      console.error('OAuth Token Client Error:', err)
       setIsLoading(false)
-      setErrorMsg('Gagal membuka popup Google.')
+      setErrorMsg('Gagal membuka popup pilihan akun.')
     }
   }
 

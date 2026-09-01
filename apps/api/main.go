@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
@@ -258,15 +259,40 @@ func main() {
 
 	api := app.Group("/api/v1")
 
-	// 1. Google / Email Auth Login & Profile Sync
+// 1. Google / Email Auth Login & Profile Sync
 	api.Post("/auth/google-login", func(c *fiber.Ctx) error {
 		var req struct {
 			Email     string `json:"email"`
 			Name      string `json:"name"`
 			AvatarURL string `json:"avatar_url"`
 			GoogleID  string `json:"google_id"`
+			Token     string `json:"token"`
 		}
-		if err := c.BodyParser(&req); err != nil || req.Email == "" {
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+		}
+
+		// Jika menerima OAuth Access Token dari tokenClient, fetch userinfo dari Google API
+		if req.Token != "" {
+			resp, err := http.Get("https://www.googleapis.com/oauth2/v3/userinfo?access_token=" + req.Token)
+			if err == nil && resp.StatusCode == 200 {
+				defer resp.Body.Close()
+				var googleInfo struct {
+					Email   string `json:"email"`
+					Name    string `json:"name"`
+					Picture string `json:"picture"`
+					Sub     string `json:"sub"`
+				}
+				if err := json.NewDecoder(resp.Body).Decode(&googleInfo); err == nil && googleInfo.Email != "" {
+					req.Email = googleInfo.Email
+					req.Name = googleInfo.Name
+					req.AvatarURL = googleInfo.Picture
+					req.GoogleID = googleInfo.Sub
+				}
+			}
+		}
+
+		if req.Email == "" {
 			return c.Status(400).JSON(fiber.Map{"error": "Email is required"})
 		}
 
