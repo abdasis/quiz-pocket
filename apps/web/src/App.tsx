@@ -27,9 +27,8 @@ interface Category {
   slug: string
   title: string
   description: string
-  level: string
-  icon: string
-  question_count: number
+  level?: string
+  icon?: string
 }
 
 interface LiveSlotResponse {
@@ -39,32 +38,34 @@ interface LiveSlotResponse {
   seconds_remaining: number
   category: Category
   questions: Question[]
-  question_count: number
-  is_completed: boolean
+  is_completed?: boolean
   submission?: {
     score: number
-    total: number
     correct_count: number
+    time_spent_sec: number
   }
-}
-
-interface LeaderboardUser {
-  id: number
-  name: string
-  email: string
-  avatar_url?: string
-  points: number
-  quizzes_completed: number
-  streak: number
 }
 
 export function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    const saved = localStorage.getItem('quiz_pocket_theme')
-    if (saved === 'light' || saved === 'dark') return saved
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    return (localStorage.getItem('quiz_pocket_theme') as 'light' | 'dark') || 'light'
   })
 
+  useEffect(() => {
+    const root = document.documentElement
+    if (theme === 'dark') {
+      root.classList.add('dark')
+    } else {
+      root.classList.remove('dark')
+    }
+    localStorage.setItem('quiz_pocket_theme', theme)
+  }, [theme])
+
+  const handleToggleTheme = () => {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))
+  }
+
+  // Auth User
   const [user, setUser] = useState<AuthUser | null>(() => {
     const saved = localStorage.getItem('quiz_pocket_user')
     return saved ? JSON.parse(saved) : null
@@ -81,37 +82,26 @@ export function App() {
   const [isPracticeMode, setIsPracticeMode] = useState(false)
   const [practiceQuestions, setPracticeQuestions] = useState<Question[]>([])
 
-  const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  // Global Leaderboard
+  const [leaderboard, setLeaderboard] = useState<AuthUser[]>([])
 
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark')
-    localStorage.setItem('quiz_pocket_theme', theme)
-  }, [theme])
-
-  // Fetch Live Slot Data
   const fetchLiveSlot = async () => {
     try {
-      const emailParam = user?.email ? `?email=${encodeURIComponent(user.email)}` : ''
-      const res = await fetch(`/api/v1/live-slot${emailParam}`)
-      const json = await res.json()
-      if (json.success) {
-        setLiveSlot(json)
-        setSecondsRemaining(json.seconds_remaining)
-      }
+      const emailQuery = user?.email ? `?email=${encodeURIComponent(user.email)}` : ''
+      const res = await fetch(`/api/v1/live-slot${emailQuery}`)
+      const data: LiveSlotResponse = await res.json()
+      setLiveSlot(data)
+      setSecondsRemaining(data.seconds_remaining)
     } catch (err) {
       console.error('Failed to fetch live slot:', err)
-    } finally {
-      setIsLoading(false)
     }
   }
 
-  // Fetch Leaderboard
   const fetchLeaderboard = async () => {
     try {
       const res = await fetch('/api/v1/leaderboard')
       const json = await res.json()
-      if (json.success) {
+      if (json.success && json.data) {
         setLeaderboard(json.data)
       }
     } catch (err) {
@@ -119,12 +109,25 @@ export function App() {
     }
   }
 
-  // Sync user profile stats
+  const fetchPracticeQuestions = async () => {
+    try {
+      const res = await fetch('/api/v1/practice-questions')
+      const json = await res.json()
+      if (json.success && json.questions) {
+        setPracticeQuestions(json.questions)
+        setIsPracticeMode(true)
+        setIsPlaying(true)
+      }
+    } catch (err) {
+      console.error('Failed to fetch practice questions:', err)
+    }
+  }
+
   const syncUserProfile = async (email: string) => {
     try {
       const res = await fetch(`/api/v1/user/profile?email=${encodeURIComponent(email)}`)
       const json = await res.json()
-      if (json.success) {
+      if (json.success && json.data) {
         setUser(json.data)
         localStorage.setItem('quiz_pocket_user', JSON.stringify(json.data))
       }
@@ -141,15 +144,17 @@ export function App() {
     }
   }, [user?.email])
 
-  // Live 30-Minute Countdown Clock & Auto-refresh on Slot Expiry
+  // Countdown Interval for Live Slot
   useEffect(() => {
+    if (secondsRemaining <= 0) {
+      fetchLiveSlot()
+      return
+    }
+
     const timer = setInterval(() => {
       setSecondsRemaining((prev) => {
         if (prev <= 1) {
           fetchLiveSlot()
-          fetchLeaderboard()
-          setIsPlaying(false)
-          setIsPracticeMode(false)
           return 0
         }
         return prev - 1
@@ -157,56 +162,27 @@ export function App() {
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [liveSlot?.slot_id])
+  }, [secondsRemaining])
 
-  const formatCountdown = (totalSec: number) => {
-    const m = Math.floor(totalSec / 60)
-    const s = totalSec % 60
-    return `${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`
+  const formatCountdown = (totalSeconds: number) => {
+    const m = Math.floor(totalSeconds / 60)
+    const s = totalSeconds % 60
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
   }
 
-  const handleToggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
-  }
-
-  const handleLoginSuccess = (loggedInUser: AuthUser) => {
-    setUser(loggedInUser)
-    localStorage.setItem('quiz_pocket_user', JSON.stringify(loggedInUser))
-    fetchLiveSlot()
-  }
-
-  const handleLogout = () => {
-    setUser(null)
-    localStorage.removeItem('quiz_pocket_user')
-    setIsPlaying(false)
-    setIsPracticeMode(false)
-    fetchLiveSlot()
-  }
-
-  const handleStartLiveQuiz = () => {
+  const handleStartQuiz = () => {
     if (!user) {
       setIsLoginModalOpen(true)
-      return
-    }
-    if (liveSlot?.is_completed) {
       return
     }
     setIsPracticeMode(false)
     setIsPlaying(true)
   }
 
-  const handleStartPracticeMode = async () => {
-    try {
-      const res = await fetch('/api/v1/practice-questions')
-      const json = await res.json()
-      if (json.success && json.questions.length > 0) {
-        setPracticeQuestions(json.questions)
-        setIsPracticeMode(true)
-        setIsPlaying(true)
-      }
-    } catch (err) {
-      console.error('Practice mode error:', err)
-    }
+  const handleLogout = () => {
+    setUser(null)
+    localStorage.removeItem('quiz_pocket_user')
+    fetchLiveSlot()
   }
 
   const handleFinishQuiz = async (
@@ -220,14 +196,11 @@ export function App() {
     smaCorrect: number,
     smaTotal: number
   ) => {
-    if (!user) return
-
-    // If practice mode, just don't submit points
     if (isPracticeMode) {
       return
     }
 
-    if (!liveSlot) return
+    if (!user || !liveSlot) return
 
     try {
       const res = await fetch('/api/v1/live-slot/submit', {
@@ -239,7 +212,7 @@ export function App() {
           score,
           total,
           correct_count: correctCount,
-          time_spent_sec: 60,
+          time_spent_sec: 1800 - secondsRemaining,
           sd_correct: sdCorrect,
           sd_total: sdTotal,
           smp_correct: smpCorrect,
@@ -283,7 +256,7 @@ export function App() {
         onLogout={handleLogout}
       />
 
-      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-10">
+      <main className="flex-1 max-w-4xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-10">
         {isPlaying && activeQuestions.length > 0 ? (
           <QuizPlayer
             slotId={isPracticeMode ? 999999 : (liveSlot?.slot_id || 0)}
@@ -300,23 +273,23 @@ export function App() {
             }}
           />
         ) : (
-          <div className="space-y-10 animate-in fade-in duration-300">
+          <div className="space-y-6 sm:space-y-10 animate-in fade-in duration-300">
             {/* Top Sub-Navigation / Quick Status Row */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-black/[0.04] dark:border-white/[0.04]">
-              <div className="space-y-1">
-                <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-neutral-950 dark:text-white">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-2 border-b border-black/[0.04] dark:border-white/[0.04]">
+              <div className="space-y-0.5 sm:space-y-1">
+                <h2 className="text-xl sm:text-3xl font-semibold tracking-tight text-neutral-950 dark:text-white">
                   Kuis Pengetahuan Nyata
                 </h2>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400 font-normal leading-relaxed">
+                <p className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 font-normal leading-relaxed">
                   Asah pemahaman logika, sains alam, dan literasi esensial jenjang SD sampai SMA.
                 </p>
               </div>
 
-              {/* Live Slot Status Pill & Stats Quick Button */}
-              <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+              {/* Action Buttons Row */}
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                 <button
                   onClick={() => setIsHistoryModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-100 dark:bg-neutral-800/80 hover:bg-neutral-200/80 dark:hover:bg-neutral-700/60 border border-black/[0.04] dark:border-white/[0.06] text-xs font-semibold text-neutral-700 dark:text-neutral-300 cursor-pointer pressable"
+                  className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-neutral-100 dark:bg-neutral-800/80 hover:bg-neutral-200/80 dark:hover:bg-neutral-700/60 border border-black/[0.04] dark:border-white/[0.06] text-[11px] sm:text-xs font-semibold text-neutral-700 dark:text-neutral-300 cursor-pointer pressable"
                 >
                   <History className="w-3.5 h-3.5" />
                   <span>Arsip Sesi</span>
@@ -325,66 +298,66 @@ export function App() {
                 {user && (
                   <button
                     onClick={() => setIsStatsModalOpen(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/60 dark:border-indigo-800/40 text-xs font-semibold text-indigo-700 dark:text-indigo-300 cursor-pointer pressable"
+                    className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/60 dark:border-indigo-800/40 text-[11px] sm:text-xs font-semibold text-indigo-700 dark:text-indigo-300 cursor-pointer pressable"
                   >
                     <BarChart3 className="w-3.5 h-3.5" />
                     <span>Rapor & Gelar</span>
                   </button>
                 )}
 
-                <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-white/80 dark:bg-[#141416]/80 backdrop-blur-xl border border-black/[0.06] dark:border-white/[0.08] text-xs font-medium text-neutral-700 dark:text-neutral-300">
+                <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full bg-white/80 dark:bg-[#141416]/80 backdrop-blur-xl border border-black/[0.06] dark:border-white/[0.08] text-[11px] sm:text-xs font-medium text-neutral-700 dark:text-neutral-300">
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                   </span>
                   <span className="font-mono text-neutral-900 dark:text-neutral-100 font-semibold">{formatCountdown(secondsRemaining)}</span>
-                  <span className="text-neutral-400 dark:text-neutral-500">menuju rotasi</span>
+                  <span className="text-neutral-400 dark:text-neutral-500 hidden xs:inline">rotasi</span>
                 </div>
               </div>
             </div>
 
             {/* Apple-Style Hero Feature Card */}
             {liveSlot && (
-              <section className="relative overflow-hidden rounded-3xl bg-white dark:bg-[#111114] border border-black/[0.06] dark:border-white/[0.08] p-6 sm:p-8 transition-all">
+              <section className="relative overflow-hidden rounded-3xl bg-white dark:bg-[#111114] border border-black/[0.06] dark:border-white/[0.08] p-5 sm:p-8 transition-all">
                 <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/[0.04] dark:bg-indigo-500/[0.08] blur-3xl pointer-events-none rounded-full" />
                 <div className="absolute bottom-0 left-0 w-80 h-80 bg-purple-500/[0.03] dark:bg-purple-500/[0.06] blur-3xl pointer-events-none rounded-full" />
 
-                <div className="relative z-10 space-y-6">
+                <div className="relative z-10 space-y-4 sm:space-y-6">
                   {/* Category Level & Slot Timer Header */}
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-semibold border border-indigo-200/60 dark:border-indigo-800/40">
+                  <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-[11px] sm:text-xs font-semibold border border-indigo-200/60 dark:border-indigo-800/40">
                         <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
                         <span>Sesi Live Multi-Jenjang</span>
                       </span>
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-xl bg-neutral-100 dark:bg-neutral-800/60 text-neutral-600 dark:text-neutral-300 text-xs font-medium border border-black/[0.04] dark:border-white/[0.06]">
-                        {totalQuestions} Butir Soal (SD · SMP · SMA)
+                      <span className="inline-flex items-center px-2 sm:px-2.5 py-1 rounded-xl bg-neutral-100 dark:bg-neutral-800/60 text-neutral-600 dark:text-neutral-300 text-[11px] sm:text-xs font-medium border border-black/[0.04] dark:border-white/[0.06]">
+                        {totalQuestions} Butir Soal
                       </span>
                     </div>
 
-                    <div className="inline-flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400 font-mono">
+                    <div className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs text-neutral-500 dark:text-neutral-400 font-mono">
                       <Clock className="w-3.5 h-3.5 text-neutral-400" />
                       <span>{formatCountdown(secondsRemaining)} Tersisa</span>
                     </div>
                   </div>
 
                   {/* Main Subject & Description */}
-                  <div className="space-y-2 max-w-2xl">
-                    <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-900 dark:text-white">
+                  <div className="space-y-1.5 sm:space-y-2 max-w-2xl">
+                    <h3 className="text-lg sm:text-2xl font-bold tracking-tight text-neutral-950 dark:text-white leading-tight">
                       Kuis Terpadu Wawasan Nyata & Sains
                     </h3>
-                    <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                      Kombinasi soal pilihan tingkat SD, SMP, dan SMA. Dapatkan <span className="font-semibold text-neutral-900 dark:text-white">Bonus Kecepatan (+5)</span> & <span className="font-semibold text-amber-500">Combo Multiplier (hingga 2.0x)</span> jika menjawab benar secara berturut-turut!
+                    <p className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed font-normal">
+                      Paket soal acak berkualitas tinggi menggabungkan materi esensial SD (+10 Pts), SMP (+20 Pts), dan SMA (+30 Pts).
                     </p>
                   </div>
 
-                  {/* 30-Min Timeline Bar */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px] font-medium text-neutral-400 dark:text-neutral-500 font-mono">
-                      <span>Waktu Window Sesi</span>
-                      <span>{Math.round(100 - progressPercent)}% waktu tersisa</span>
+                  {/* 30-Minute Cycle Timeline Bar */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-mono text-neutral-400">
+                      <span>Timeline Sesi 30 Menit</span>
+                      <span>Sisa {Math.ceil(secondsRemaining / 60)} menit</span>
                     </div>
-                    <div className="w-full h-1.5 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
+                    <div className="w-full h-1.5 rounded-full bg-neutral-100 dark:bg-neutral-800/80 overflow-hidden">
                       <div
                         className="h-full bg-indigo-600 dark:bg-indigo-500 rounded-full transition-all duration-1000 ease-linear"
                         style={{ width: `${progressPercent}%` }}
@@ -392,185 +365,210 @@ export function App() {
                     </div>
                   </div>
 
-                  {/* Actions & State */}
-                  <div className="pt-2 flex flex-wrap items-center gap-3">
+                  {/* Action CTA or Completed Status */}
+                  <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
                     {liveSlot.is_completed ? (
-                      <div className="flex flex-wrap items-center gap-3 w-full">
-                        <div className="inline-flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/40 text-emerald-800 dark:text-emerald-300 font-medium text-sm">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                          <span>
-                            Sesi ini telah selesai (+{liveSlot.submission?.score || 0} Poin).
-                          </span>
+                      <div className="w-full flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/40">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                            <CheckCircle2 className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-xs sm:text-sm font-semibold text-emerald-950 dark:text-emerald-100">
+                              Kuis Sesi Ini Selesai Dikerjakan!
+                            </p>
+                            <p className="text-[11px] text-emerald-800/80 dark:text-emerald-300/80 font-mono">
+                              Skor Diperoleh: +{liveSlot.submission?.score} Poin • {liveSlot.submission?.correct_count} Benar
+                            </p>
+                          </div>
                         </div>
 
-                        {/* Practice Button for Waiting Period */}
+                        {/* Practice Mode Trigger button for idle waiting */}
                         <button
-                          onClick={handleStartPracticeMode}
-                          className="h-12 px-5 rounded-2xl bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] border border-black/[0.06] dark:border-white/[0.08] font-semibold text-xs text-neutral-800 dark:text-neutral-200 inline-flex items-center gap-2 cursor-pointer pressable"
+                          onClick={fetchPracticeQuestions}
+                          className="h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs inline-flex items-center justify-center gap-2 cursor-pointer pressable shrink-0"
                         >
-                          <Gamepad2 className="w-4 h-4 text-indigo-500" />
-                          <span>Main Mode Latihan (Menunggu Sesi)</span>
+                          <Gamepad2 className="w-4 h-4" />
+                          <span>Main Mode Latihan</span>
                         </button>
                       </div>
                     ) : (
-                      <button
-                        onClick={handleStartLiveQuiz}
-                        disabled={isLoading}
-                        className="h-12 px-6 rounded-2xl bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 hover:bg-neutral-800 dark:hover:bg-neutral-100 font-semibold text-sm inline-flex items-center gap-2.5 cursor-pointer pressable transition-colors border border-transparent shadow-xs"
-                      >
-                        <Play className="w-4 h-4 fill-current" />
-                        <span>Mulai Mengerjakan ({totalQuestions} Soal)</span>
-                      </button>
-                    )}
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
+                        <button
+                          onClick={handleStartQuiz}
+                          className="h-11 sm:h-12 px-6 sm:px-8 rounded-2xl bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 hover:bg-neutral-800 dark:hover:bg-neutral-100 font-semibold text-xs sm:text-sm inline-flex items-center justify-center gap-2 cursor-pointer pressable shadow-xs"
+                        >
+                          <Play className="w-4 h-4 fill-current" />
+                          <span>Mulai Kuis Sesi Ini</span>
+                        </button>
 
-                    {!user && (
-                      <button
-                        onClick={() => setIsLoginModalOpen(true)}
-                        className="h-12 px-5 rounded-2xl bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] border border-black/[0.06] dark:border-white/[0.08] text-xs font-semibold text-neutral-800 dark:text-neutral-200 inline-flex items-center gap-2 cursor-pointer pressable"
-                      >
-                        <ShieldCheck className="w-4 h-4 text-indigo-500" />
-                        <span>Masuk Akun Gmail</span>
-                      </button>
+                        <button
+                          onClick={fetchPracticeQuestions}
+                          className="h-11 sm:h-12 px-4 sm:px-6 rounded-2xl bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] border border-black/[0.06] dark:border-white/[0.08] text-neutral-800 dark:text-neutral-200 font-semibold text-xs inline-flex items-center justify-center gap-2 cursor-pointer pressable"
+                        >
+                          <Gamepad2 className="w-4 h-4" />
+                          <span>Mode Latihan</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
               </section>
             )}
 
-            {/* Educational Tier Breakdown & Rules Grid (Apple HIG Grid) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-5 rounded-3xl bg-white dark:bg-[#111114] border border-black/[0.06] dark:border-white/[0.08] space-y-3 transition-colors">
-                <div className="w-9 h-9 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                  <BookOpen className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-semibold text-neutral-900 dark:text-white">Tingkat SD</h4>
-                    <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">+10 Pts</span>
-                  </div>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 leading-relaxed">
-                    Sains dasar, alam semesta, organ tubuh, rantai makanan, dan geografi nusantara.
-                  </p>
-                </div>
+            {/* Apple Inset Group: 3 Tiers of Questions Grid */}
+            <div className="space-y-3 sm:space-y-4">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider font-mono text-neutral-400">
+                  Tingkatan Soal Terpadu
+                </h3>
+                <span className="text-[11px] text-neutral-400 font-mono">3 Pilar Sains & Logika</span>
               </div>
 
-              <div className="p-5 rounded-3xl bg-white dark:bg-[#111114] border border-black/[0.06] dark:border-white/[0.08] space-y-3 transition-colors">
-                <div className="w-9 h-9 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-800/40 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                  <Compass className="w-4 h-4" />
-                </div>
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                {/* SD Card */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#111114] border border-black/[0.06] dark:border-white/[0.08] space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-semibold text-neutral-900 dark:text-white">Tingkat SMP</h4>
-                    <span className="text-xs font-mono font-bold text-blue-600 dark:text-blue-400">+20 Pts</span>
+                    <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                      <BookOpen className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/40">
+                      +10 Pts
+                    </span>
                   </div>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 leading-relaxed">
-                    Sejarah kemerdekaan, fenomena fisika sehari-hari, iklim, dan geografi regional.
-                  </p>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-bold text-neutral-950 dark:text-white">Tingkat SD (Dasar)</h4>
+                    <p className="text-[11px] text-neutral-500 mt-0.5 leading-relaxed">
+                      Sains alamiah, flora & fauna, serta pengetahuan lingkungan dasar.
+                    </p>
+                  </div>
                 </div>
-              </div>
 
-              <div className="p-5 rounded-3xl bg-white dark:bg-[#111114] border border-black/[0.06] dark:border-white/[0.08] space-y-3 transition-colors">
-                <div className="w-9 h-9 rounded-2xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200/60 dark:border-purple-800/40 flex items-center justify-center text-purple-600 dark:text-purple-400">
-                  <GraduationCap className="w-4 h-4" />
-                </div>
-                <div>
+                {/* SMP Card */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#111114] border border-black/[0.06] dark:border-white/[0.08] space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-semibold text-neutral-900 dark:text-white">Tingkat SMA</h4>
-                    <span className="text-xs font-mono font-bold text-purple-600 dark:text-purple-400">+30 Pts</span>
+                    <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                      <Compass className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/40">
+                      +20 Pts
+                    </span>
                   </div>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 leading-relaxed">
-                    Logika nalar, hukum sains terapan, literasi keuangan, dan dinamika lingkungan nyata.
-                  </p>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-bold text-neutral-950 dark:text-white">Tingkat SMP (Menengah)</h4>
+                    <p className="text-[11px] text-neutral-500 mt-0.5 leading-relaxed">
+                      Geografi nusantara, sejarah nasional, dan fenomena fisika bumi.
+                    </p>
+                  </div>
+                </div>
+
+                {/* SMA Card */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#111114] border border-black/[0.06] dark:border-white/[0.08] space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/50 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                      <GraduationCap className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/40">
+                      +30 Pts
+                    </span>
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-bold text-neutral-950 dark:text-white">Tingkat SMA (Lanjutan)</h4>
+                    <p className="text-[11px] text-neutral-500 mt-0.5 leading-relaxed">
+                      Logika kritis, finansial/ekonomi, sains terapan, dan penalaran ilmiah.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Global Leaderboard Section (Apple Inset Grouped Table Style) */}
-            <section className="space-y-4 pt-2">
+            {/* Apple Inset Grouped Table: Leaderboard */}
+            <section className="space-y-3 sm:space-y-4">
               <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800/40 flex items-center justify-center text-amber-500">
-                    <Trophy className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-semibold text-neutral-900 dark:text-white">Papan Peringkat Global</h3>
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400">Akumulasi skor dan gelar kehormatan seluruh pemain</p>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-4 h-4 text-amber-500" />
+                  <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider font-mono text-neutral-400">
+                    Papan Peringkat Global
+                  </h3>
                 </div>
-                <div className="text-xs text-neutral-400 font-mono">
-                  {leaderboard.length} Pemain
-                </div>
+                <span className="text-[11px] text-neutral-400 font-mono">Real-Time Update</span>
               </div>
 
-              {/* Inset List Container */}
-              <div className="bg-white dark:bg-[#111114] rounded-3xl border border-black/[0.06] dark:border-white/[0.08] overflow-hidden divide-y divide-black/[0.04] dark:divide-white/[0.04]">
+              <div className="rounded-3xl bg-white dark:bg-[#111114] border border-black/[0.06] dark:border-white/[0.08] divide-y divide-black/[0.04] dark:divide-white/[0.04] overflow-hidden">
                 {leaderboard.length === 0 ? (
-                  <div className="p-12 text-center text-neutral-400 text-xs font-normal">
-                    Belum ada riwayat pengerjaan kuis. Jadilah yang pertama meraih skor!
+                  <div className="p-8 text-center text-xs text-neutral-400">
+                    Belum ada data peringkat kuis.
                   </div>
                 ) : (
-                  leaderboard.map((lbUser, idx) => {
-                    const isCurrentUser = user?.email === lbUser.email
-                    const rank = idx + 1
-                    const rankTitle = getUserTitle(lbUser.points || 0)
+                  leaderboard.map((item, index) => {
+                    const title = getUserTitle(item.points || 0)
+                    const isCurrentUser = user && user.email === item.email
 
                     return (
                       <div
-                        key={lbUser.id}
-                        className={`p-4 sm:px-6 sm:py-4 flex items-center justify-between gap-3 ${
-                          isCurrentUser
-                            ? 'bg-indigo-50/40 dark:bg-indigo-950/20'
+                        key={item.id || index}
+                        className={`p-3.5 sm:px-6 flex items-center justify-between gap-2.5 sm:gap-4 transition-colors ${
+                          isCurrentUser 
+                            ? 'bg-indigo-50/50 dark:bg-indigo-950/20' 
                             : 'hover:bg-neutral-50/50 dark:hover:bg-neutral-900/30'
-                        } transition-colors`}
+                        }`}
                       >
-                        {/* Left Info: Rank + Avatar + Name + Title Badge */}
-                        <div className="flex items-center gap-3.5 min-w-0">
-                          <span className="w-6 text-center text-xs font-mono font-bold text-neutral-400 dark:text-neutral-500 shrink-0">
-                            {rank === 1 ? '01' : rank === 2 ? '02' : rank === 3 ? '03' : rank < 10 ? `0${rank}` : rank}
+                        {/* Rank + User Identity */}
+                        <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
+                          <span className={`w-5 sm:w-6 font-mono text-xs sm:text-sm font-bold shrink-0 ${
+                            index === 0 
+                              ? 'text-amber-500' 
+                              : index === 1 
+                              ? 'text-neutral-400 dark:text-neutral-300' 
+                              : index === 2 
+                              ? 'text-amber-700 dark:text-amber-600' 
+                              : 'text-neutral-400'
+                          }`}>
+                            {index < 9 ? `0${index + 1}` : index + 1}
                           </span>
 
-                          <div className="w-8 h-8 rounded-full bg-neutral-100 dark:bg-neutral-800 border border-black/[0.04] dark:border-white/[0.06] overflow-hidden shrink-0">
-                            {lbUser.avatar_url ? (
-                              <img src={lbUser.avatar_url} alt={lbUser.name} className="w-full h-full object-cover" />
+                          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-neutral-100 dark:bg-neutral-800 border border-black/[0.04] dark:border-white/[0.06] overflow-hidden flex items-center justify-center shrink-0">
+                            {item.avatar_url ? (
+                              <img src={item.avatar_url} alt={item.name} className="w-full h-full object-cover" />
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center text-xs font-bold text-neutral-500">
-                                {lbUser.name ? lbUser.name[0].toUpperCase() : 'U'}
-                              </div>
+                              <span className="text-xs font-bold text-neutral-500">
+                                {item.name ? item.name[0].toUpperCase() : 'U'}
+                              </span>
                             )}
                           </div>
 
                           <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-sm font-semibold text-neutral-900 dark:text-white truncate">
-                                {lbUser.name || lbUser.email.split('@')[0]}
+                            <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
+                              <p className="text-xs sm:text-sm font-semibold text-neutral-900 dark:text-white truncate">
+                                {item.name || item.email.split('@')[0]}
                               </p>
-                              
-                              {/* Honor Title Badge */}
-                              <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-lg border ${rankTitle.bgClass} ${rankTitle.colorClass} ${rankTitle.borderClass}`}>
-                                {rankTitle.title}
+                              {/* Title Badge */}
+                              <span className={`text-[9px] sm:text-[10px] font-bold px-1.5 py-0.2 rounded-md ${title.bgClass} ${title.colorClass} border ${title.borderClass}`}>
+                                {title.title}
                               </span>
-
                               {isCurrentUser && (
-                                <span className="text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/40">
+                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-semibold font-mono">
                                   Kamu
                                 </span>
                               )}
                             </div>
-                            <p className="text-[11px] text-neutral-400 font-mono flex items-center gap-2 mt-0.5">
-                              <span>{lbUser.quizzes_completed || 0} kuis selesai</span>
-                              <span>•</span>
-                              <span className="text-amber-500 flex items-center gap-0.5">
-                                <Flame className="w-3 h-3 fill-amber-500" /> {lbUser.streak || 1} Hari
+                            <div className="flex items-center gap-2 text-[10px] sm:text-[11px] text-neutral-400 font-mono mt-0.5">
+                              <span className="flex items-center gap-0.5">
+                                <Flame className="w-3 h-3 text-amber-500" />
+                                {item.streak || 1}d
                               </span>
-                            </p>
+                              <span>•</span>
+                              <span>{item.quizzes_completed || 0} Sesi</span>
+                            </div>
                           </div>
                         </div>
 
-                        {/* Right Points Score */}
-                        <div className="text-right shrink-0">
-                          <p className="text-sm font-bold text-neutral-900 dark:text-white font-mono tracking-tight">
-                            {lbUser.points || 0} <span className="text-xs font-normal text-neutral-400">pts</span>
-                          </p>
+                        {/* Points Badge */}
+                        <div className="text-right font-mono shrink-0">
+                          <span className="text-xs sm:text-base font-bold text-neutral-900 dark:text-white">
+                            {item.points?.toLocaleString('id-ID') || 0}
+                          </span>
+                          <span className="text-[10px] sm:text-xs text-neutral-400 ml-1">pts</span>
                         </div>
                       </div>
                     )
@@ -581,6 +579,21 @@ export function App() {
           </div>
         )}
       </main>
+
+      {/* Modern Clean Footer */}
+      <footer className="w-full border-t border-black/[0.04] dark:border-white/[0.04] py-6 text-center text-xs text-neutral-400 font-normal">
+        <div className="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <p>© 2026 Quiz Pocket. Mengasah wawasan & logika kehidupan nyata.</p>
+          <div className="flex items-center gap-4 text-[11px] font-mono text-neutral-500">
+            <span>Rotasi 30 Menit</span>
+            <span>•</span>
+            <span className="flex items-center gap-1 text-emerald-500">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Sistem Terproteksi
+            </span>
+          </div>
+        </div>
+      </footer>
 
       {/* Stats / Report Modal */}
       <StatsModal
@@ -612,19 +625,14 @@ export function App() {
       <LoginModal
         isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
-        onLoginSuccess={handleLoginSuccess}
+        onLoginSuccess={(loggedUser) => {
+          setUser(loggedUser)
+          localStorage.setItem('quiz_pocket_user', JSON.stringify(loggedUser))
+          setIsLoginModalOpen(false)
+          fetchLiveSlot()
+          fetchLeaderboard()
+        }}
       />
-
-      {/* Minimalistic Apple Footer */}
-      <footer className="w-full border-t border-black/[0.06] dark:border-white/[0.08] py-6 text-xs text-neutral-400 dark:text-neutral-500 transition-colors">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>© {new Date().getFullYear()} Quiz Pocket. Rotasi kuis 30 menit & Papan Peringkat Global.</p>
-          <div className="flex items-center gap-4 font-mono text-[11px]">
-            <span>SD · SMP · SMA</span>
-            <span>quiz.abdasis.my.id</span>
-          </div>
-        </div>
-      </footer>
     </div>
   )
 }
