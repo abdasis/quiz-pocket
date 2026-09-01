@@ -126,10 +126,40 @@ export function QuizPlayer({
   const isCompletedRef = useRef(false)
   isCompletedRef.current = isCompleted
 
-  const currentQ = questions[currentIndex] || questions[0]
-  const progressPercent = Math.round(((currentIndex + 1) / questions.length) * 100)
+  const currentQ = (questions && questions.length > 0 && questions[currentIndex]) 
+    ? questions[currentIndex] 
+    : (questions && questions[0]) || {
+        id: 0,
+        category_id: 0,
+        question: 'Memuat butir soal...',
+        options: ['A', 'B', 'C', 'D'],
+        answer_index: 0,
+        explanation: '',
+        level: 'SD',
+        points: 10,
+      }
 
-  // Auto-Save Continuous State to LocalStorage (Persist across refresh/exit)
+  if (!questions || questions.length === 0) {
+    return (
+      <div className="w-full max-w-4xl mx-auto p-12 text-center space-y-4 rounded-3xl bg-white dark:bg-[#111114] border border-black/[0.06] dark:border-white/[0.08]">
+        <div className="w-12 h-12 mx-auto rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 flex items-center justify-center animate-pulse">
+          <Clock className="w-6 h-6" />
+        </div>
+        <h3 className="text-base font-bold text-neutral-900 dark:text-white">Menyiapkan Paket Soal...</h3>
+        <p className="text-xs text-neutral-500 max-w-sm mx-auto">
+          Sedang menyinkronkan butir soal dari server. Harap tunggu sebentar.
+        </p>
+        <button
+          onClick={onExit}
+          className="px-5 py-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-xs font-semibold text-neutral-800 dark:text-neutral-200 hover:bg-neutral-200"
+        >
+          Kembali ke Beranda
+        </button>
+      </div>
+    )
+  }
+
+  const progressPercent = questions.length > 0 ? Math.round(((currentIndex + 1) / questions.length) * 100) : 0
   useEffect(() => {
     if (isPracticeMode || isCompleted) return
 
@@ -621,7 +651,7 @@ export function QuizPlayer({
 
         {/* Multiple Choice Grid */}
         <div className="grid grid-cols-1 gap-3 pt-1">
-          {currentQ.options?.map((opt, idx) => {
+          {(currentQ.options || []).map((opt, idx) => {
             const isSelected = selectedOption === idx
             const isCorrect = idx === currentQ.answer_index
 
