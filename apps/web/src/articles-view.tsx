@@ -155,6 +155,24 @@ export function ArticlesView() {
                   )
                 },
                 pre: ({ children }) => <>{children}</>,
+                img: ({ alt, src, ...props }) => (
+                  <figure className="my-6 space-y-2">
+                    <div className="overflow-hidden rounded-2xl border border-black/[0.06] dark:border-white/[0.08] bg-neutral-100 dark:bg-neutral-900/60 flex items-center justify-center">
+                      <img
+                        src={src}
+                        alt={alt || 'Ilustrasi Wawasan'}
+                        className="w-full max-h-[420px] object-contain rounded-2xl transition hover:scale-[1.01]"
+                        loading="lazy"
+                        {...props}
+                      />
+                    </div>
+                    {alt && (
+                      <figcaption className="text-center text-xs font-mono text-neutral-500 dark:text-neutral-400 italic">
+                        {alt}
+                      </figcaption>
+                    )}
+                  </figure>
+                ),
                 table: ({ ...props }) => (
                   <div className="w-full overflow-x-auto my-4 rounded-2xl border border-black/[0.06] dark:border-white/[0.08]">
                     <table className="w-full text-xs sm:text-sm text-left border-collapse" {...props} />
