@@ -75,9 +75,9 @@ export function SessionHistoryModal({ isOpen, onClose }: SessionHistoryModalProp
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-[#111114] rounded-3xl border border-black/[0.08] dark:border-white/[0.1] shadow-2xl p-6 sm:p-8 space-y-6 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between">
+      <div className="relative w-full max-w-2xl bg-white dark:bg-[#111114] rounded-3xl border border-black/[0.08] dark:border-white/[0.1] shadow-2xl flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-200">
+        {/* Fixed Modal Header */}
+        <div className="flex items-center justify-between p-5 sm:p-6 border-b border-black/[0.06] dark:border-white/[0.06] shrink-0 bg-white/80 dark:bg-[#111114]/80 backdrop-blur-md">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200/60 dark:border-indigo-800/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
               <History className="w-5 h-5" />
@@ -96,118 +96,132 @@ export function SessionHistoryModal({ isOpen, onClose }: SessionHistoryModalProp
           </button>
         </div>
 
-        {/* Selected Session Drilldown */}
-        {selectedSession ? (
-          <div className="space-y-4 animate-in fade-in duration-150">
-            <button
-              onClick={() => setSelectedSession(null)}
-              className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 cursor-pointer pressable"
-            >
-              ← Kembali ke Daftar Sesi
-            </button>
+        {/* Scrollable Modal Body */}
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
+          {/* Selected Session Drilldown */}
+          {selectedSession ? (
+            <div className="space-y-4 animate-in fade-in duration-150">
+              <button
+                onClick={() => setSelectedSession(null)}
+                className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 cursor-pointer pressable"
+              >
+                ← Kembali ke Daftar Sesi
+              </button>
 
-            <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-black/[0.04] dark:border-white/[0.04]">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-sm font-bold text-neutral-900 dark:text-white">
-                    Sesi #{selectedSession.session.slot_id} ({formatSlotDate(selectedSession.session.slot_start)})
-                  </h4>
-                  <p className="text-xs text-neutral-500 font-mono mt-0.5">
-                    Pukul {formatSlotTime(selectedSession.session.slot_start)} - {formatSlotTime(selectedSession.session.slot_end)} WIB • {selectedSession.session.question_count} Butir Soal
-                  </p>
+              <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-black/[0.04] dark:border-white/[0.04]">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-bold text-neutral-900 dark:text-white">
+                      Sesi #{selectedSession.session.slot_id} ({formatSlotDate(selectedSession.session.slot_start)})
+                    </h4>
+                    <p className="text-xs text-neutral-500 font-mono mt-0.5">
+                      Pukul {formatSlotTime(selectedSession.session.slot_start)} - {formatSlotTime(selectedSession.session.slot_end)} WIB • {selectedSession.session.question_count} Butir Soal
+                    </p>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-bold font-mono border border-indigo-200/60 dark:border-indigo-800/40">
+                    {selectedSession.participants || (selectedSession.submissions?.length || 0)} Partisipan
+                  </span>
                 </div>
-                <span className="px-2.5 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-bold font-mono border border-indigo-200/60 dark:border-indigo-800/40">
-                  {selectedSession.participants || (selectedSession.submissions?.length || 0)} Partisipan
-                </span>
+              </div>
+
+              <div className="space-y-2">
+                <h5 className="text-xs font-bold font-mono text-neutral-400 uppercase tracking-wider">
+                  Daftar Nilai Peserta Sesi Ini
+                </h5>
+
+                {(!selectedSession.submissions || selectedSession.submissions.length === 0) ? (
+                  <div className="p-8 text-center text-xs text-neutral-400">
+                    Tidak ada peserta yang menyelesaikan kuis pada sesi ini.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-black/[0.04] dark:divide-white/[0.04] rounded-2xl bg-white dark:bg-[#151518] border border-black/[0.06] dark:border-white/[0.08] overflow-hidden">
+                    {selectedSession.submissions.map((p, idx) => (
+                      <div key={p.id || idx} className="p-3.5 sm:px-4 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-3">
+                          <span className="w-5 font-mono font-bold text-neutral-400">{idx + 1}</span>
+                          <div className="w-7 h-7 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
+                            {p.avatar_url ? (
+                              <img src={p.avatar_url} alt={p.user_name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center font-bold text-[10px] text-neutral-500">
+                                {p.user_name ? p.user_name[0].toUpperCase() : 'U'}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-neutral-900 dark:text-white">{p.user_name || p.user_email}</p>
+                            <p className="text-[10px] text-neutral-400 font-mono">
+                              {p.correct_count} Benar {p.time_spent_sec ? `• ${Math.floor(p.time_spent_sec / 60)}m ${p.time_spent_sec % 60}s` : ''}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                          +{p.score} pts
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
-
-            <div className="space-y-2">
-              <h5 className="text-xs font-bold font-mono text-neutral-400 uppercase tracking-wider">
-                Daftar Nilai Peserta Sesi Ini
-              </h5>
-
-              {(!selectedSession.submissions || selectedSession.submissions.length === 0) ? (
-                <div className="p-8 text-center text-xs text-neutral-400">
-                  Tidak ada peserta yang menyelesaikan kuis pada sesi ini.
-                </div>
+          ) : (
+            /* Session List */
+            <div className="space-y-3">
+              {loading ? (
+                <div className="p-8 text-center text-xs text-neutral-400">Memuat arsip sesi kuis...</div>
+              ) : history.length === 0 ? (
+                <div className="p-8 text-center text-xs text-neutral-400">Belum ada rekaman sesi lampau.</div>
               ) : (
-                <div className="divide-y divide-black/[0.04] dark:divide-white/[0.04] rounded-2xl bg-white dark:bg-[#151518] border border-black/[0.06] dark:border-white/[0.08] overflow-hidden">
-                  {selectedSession.submissions.map((p, idx) => (
-                    <div key={p.id || idx} className="p-3.5 sm:px-4 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-3">
-                        <span className="w-5 font-mono font-bold text-neutral-400">{idx + 1}</span>
-                        <div className="w-7 h-7 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
-                          {p.avatar_url ? (
-                            <img src={p.avatar_url} alt={p.user_name} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center font-bold text-[10px] text-neutral-500">
-                              {p.user_name ? p.user_name[0].toUpperCase() : 'U'}
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-neutral-900 dark:text-white">{p.user_name || p.user_email}</p>
-                          <p className="text-[10px] text-neutral-400 font-mono">
-                            {p.correct_count} Benar {p.time_spent_sec ? `• ${Math.floor(p.time_spent_sec / 60)}m ${p.time_spent_sec % 60}s` : ''}
-                          </p>
-                        </div>
+                history.map((item) => (
+                  <div
+                    key={item.session.id}
+                    onClick={() => setSelectedSession(item)}
+                    className="p-4 rounded-2xl bg-white dark:bg-[#151518] border border-black/[0.06] dark:border-white/[0.08] hover:border-indigo-500/50 flex items-center justify-between gap-3 cursor-pointer pressable transition-all"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center text-neutral-500 shrink-0">
+                        <Calendar className="w-4 h-4" />
                       </div>
-
-                      <div className="text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                        +{p.score} pts
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-neutral-900 dark:text-white">
+                            Sesi #{item.session.slot_id}
+                          </span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400">
+                            {item.session.question_count} Soal
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-neutral-500 font-mono mt-0.5">
+                          {formatSlotDate(item.session.slot_start)} • {formatSlotTime(item.session.slot_start)} - {formatSlotTime(item.session.slot_end)} WIB
+                        </p>
                       </div>
                     </div>
-                  ))}
-                </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-mono font-semibold text-neutral-600 dark:text-neutral-400 flex items-center gap-1">
+                        <Users className="w-3.5 h-3.5 text-indigo-500" />
+                        {item.participants || (item.submissions?.length || 0)} Peserta
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-neutral-400" />
+                    </div>
+                  </div>
+                ))
               )}
             </div>
-          </div>
-        ) : (
-          /* Session List */
-          <div className="space-y-3">
-            {loading ? (
-              <div className="p-8 text-center text-xs text-neutral-400">Memuat arsip sesi kuis...</div>
-            ) : history.length === 0 ? (
-              <div className="p-8 text-center text-xs text-neutral-400">Belum ada rekaman sesi lampau.</div>
-            ) : (
-              history.map((item) => (
-                <div
-                  key={item.session.id}
-                  onClick={() => setSelectedSession(item)}
-                  className="p-4 rounded-2xl bg-white dark:bg-[#151518] border border-black/[0.06] dark:border-white/[0.08] hover:border-indigo-500/50 flex items-center justify-between gap-3 cursor-pointer pressable transition-all"
-                >
-                  <div className="flex items-center gap-3.5 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center text-neutral-500 shrink-0">
-                      <Calendar className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-neutral-900 dark:text-white">
-                          Sesi #{item.session.slot_id}
-                        </span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400">
-                          {item.session.question_count} Soal
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-neutral-500 font-mono mt-0.5">
-                        {formatSlotDate(item.session.slot_start)} • {formatSlotTime(item.session.slot_start)} - {formatSlotTime(item.session.slot_end)} WIB
-                      </p>
-                    </div>
-                  </div>
+          )}
+        </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-mono font-semibold text-neutral-600 dark:text-neutral-400 flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5 text-indigo-500" />
-                      {item.participants || (item.submissions?.length || 0)} Peserta
-                    </span>
-                    <ChevronRight className="w-4 h-4 text-neutral-400" />
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
+        {/* Fixed Modal Footer */}
+        <div className="p-4 sm:px-6 border-t border-black/[0.06] dark:border-white/[0.06] bg-neutral-50/80 dark:bg-[#151518]/80 flex items-center justify-between text-xs text-neutral-400 shrink-0">
+          <span>Arsip otomatis tersimpan tiap interval 30 menit</span>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 font-bold text-xs hover:opacity-90 pressable"
+          >
+            Tutup
+          </button>
+        </div>
       </div>
     </div>
   )
