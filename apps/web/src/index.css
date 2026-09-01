@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", ui-monospace, monospace;
+}
+
+:root {
+  color-scheme: light dark;
+  --apple-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  font-family: var(--font-sans);
+  background-color: #f8fafc;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scrollbar-gutter: stable;
+}
+
+.dark html, .dark body {
+  background-color: #090a0f;
+  color: #f8fafc;
+}
+
+/* Tactile feedback */
+.pressable {
+  transition: transform 0.15s var(--apple-spring), opacity 0.15s var(--apple-spring), background-color 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pressable:active {
+  transform: scale(0.97);
+}
+
+.card-hover {
+  transition: transform 0.2s var(--apple-spring), box-shadow 0.2s var(--apple-spring), border-color 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+}
