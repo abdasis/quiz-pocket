@@ -277,10 +277,17 @@ func main() {
 			if len(list) == 0 {
 				return
 			}
-			offset := int(seedOffset) % len(list)
-			for i := 0; i < count && i < len(list); i++ {
-				idx := (offset + i) % len(list)
-				q := list[idx]
+			// Fisher-Yates shuffle deterministik berdasarkan hash slot
+			shuffled := make([]Question, len(list))
+			copy(shuffled, list)
+			
+			for i := len(shuffled) - 1; i > 0; i-- {
+				j := int(seedBytes[(int(seedOffset)+i)%len(seedBytes)]) % (i + 1)
+				shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+			}
+
+			for i := 0; i < count && i < len(shuffled); i++ {
+				q := shuffled[i]
 				var opts []string
 				if err := json.Unmarshal([]byte(q.Options), &opts); err == nil {
 					q.OptionsList = opts
@@ -293,6 +300,12 @@ func main() {
 		pickQuestions(sdQuestions, countSD, seedBytes[0])
 		pickQuestions(smpQuestions, countSMP, seedBytes[1])
 		pickQuestions(smaQuestions, countSMA, seedBytes[2])
+
+		// Interleave / Shuffle gabungan seluruh mata pelajaran (SD, SMP, SMA) agar urutan mata pelajaran bervariasi acak
+		for i := len(slotQuestions) - 1; i > 0; i-- {
+			j := int(seedBytes[(i*3)%len(seedBytes)]) % (i + 1)
+			slotQuestions[i], slotQuestions[j] = slotQuestions[j], slotQuestions[i]
+		}
 
 		// Save/Ensure QuizSession Snapshot di Database
 		var session QuizSession
