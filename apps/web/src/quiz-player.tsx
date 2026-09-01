@@ -520,41 +520,65 @@ export function QuizPlayer({
             </div>
           </div>
 
-          {/* Right Metrics: Continuous Sync Pill + Combo + Tier Badge + Countdown */}
-          <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
-            {/* Auto-Resume Status Indicator */}
-            <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/40">
-              <RefreshCw className="w-3 h-3 animate-spin" />
-              <span>Sinkron Aktif</span>
-            </span>
+          {/* Right Metrics: Icon-only Tooltips with prominent countdown */}
+          <div className="flex items-center gap-1.5 sm:gap-2 self-end sm:self-auto">
+            {/* Auto-Resume Status Icon Tooltip */}
+            <div 
+              className="relative group flex items-center justify-center w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/40 text-emerald-600 dark:text-emerald-400 cursor-help"
+              title="Sinkronisasi Sesi Aktif (Waktu server-sync)"
+            >
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              <div className="absolute top-full mt-1.5 left-1/2 -translate-x-1/2 hidden group-hover:block z-50 px-2 py-1 bg-neutral-900 dark:bg-neutral-800 text-white text-[10px] rounded-lg whitespace-nowrap shadow-md pointer-events-none font-medium">
+                Sinkron Sesi Aktif
+              </div>
+            </div>
 
-            {/* Combo Streak Indicator */}
+            {/* Combo Streak Icon Tooltip */}
             {combo >= 2 && (
-              <span className="px-2.5 py-1 rounded-xl bg-amber-500 text-white text-xs font-bold font-mono flex items-center gap-1 shadow-xs animate-bounce">
+              <div 
+                className="relative group flex items-center justify-center w-8 h-8 rounded-xl bg-amber-500 text-white cursor-help animate-bounce shadow-xs"
+                title={`Combo ${combo}x (${combo >= 5 ? '2.0x' : '1.5x'} Poin)`}
+              >
                 <Zap className="w-3.5 h-3.5 fill-current" />
-                <span>Combo {combo}x {combo >= 5 ? '(2.0x)' : '(1.5x)'}</span>
-              </span>
+                <div className="absolute top-full mt-1.5 left-1/2 -translate-x-1/2 hidden group-hover:block z-50 px-2 py-1 bg-neutral-900 dark:bg-neutral-800 text-white text-[10px] rounded-lg whitespace-nowrap shadow-md pointer-events-none font-medium">
+                  Combo {combo}x ({combo >= 5 ? '2.0x' : '1.5x'} Poin)
+                </div>
+              </div>
             )}
 
+            {/* Anti-Cheat Violation Icon Tooltip */}
             {tabSwitches > 0 && !isPracticeMode && (
-              <span className="px-2.5 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-xs font-semibold border border-amber-200/60 dark:border-amber-800/40 flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3 text-amber-500" />
-                <span>Pelanggaran: {tabSwitches}/3</span>
-              </span>
+              <div 
+                className="relative group flex items-center justify-center w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200/60 dark:border-rose-800/40 cursor-help"
+                title={`Pelanggaran Fokus: ${tabSwitches}/3`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <div className="absolute top-full mt-1.5 left-1/2 -translate-x-1/2 hidden group-hover:block z-50 px-2 py-1 bg-neutral-900 dark:bg-neutral-800 text-white text-[10px] rounded-lg whitespace-nowrap shadow-md pointer-events-none font-medium">
+                  Pelanggaran: {tabSwitches}/3
+                </div>
+              </div>
             )}
 
-            <span className="px-2.5 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-semibold border border-indigo-200/60 dark:border-indigo-800/40">
-              {currentQ.level ? `Tingkat ${currentQ.level}` : 'Umum'} · +{currentQ.points || 10} Pts
-            </span>
+            {/* Tier / Level Badge Icon Tooltip */}
+            <div 
+              className="relative group flex items-center justify-center w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/40 cursor-help"
+              title={`${currentQ.level ? `Tingkat ${currentQ.level}` : 'Umum'} (+${currentQ.points || 10} Pts)`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+              <div className="absolute top-full mt-1.5 left-1/2 -translate-x-1/2 hidden group-hover:block z-50 px-2 py-1 bg-neutral-900 dark:bg-neutral-800 text-white text-[10px] rounded-lg whitespace-nowrap shadow-md pointer-events-none font-medium">
+                {currentQ.level ? `Tingkat ${currentQ.level}` : 'Umum'} · +{currentQ.points || 10} Pts
+              </div>
+            </div>
 
-            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl font-mono text-xs font-semibold border ${
+            {/* Main Prominent Countdown Timer */}
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-xs sm:text-sm font-bold border transition-colors ${
               secondsLeft <= 5 
                 ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 animate-pulse'
                 : secondsLeft >= 25
                 ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-300'
-                : 'bg-neutral-100 dark:bg-neutral-800/60 border-black/[0.04] dark:border-white/[0.06] text-neutral-700 dark:text-neutral-300'
+                : 'bg-neutral-100 dark:bg-neutral-800/80 border-black/[0.04] dark:border-white/[0.06] text-neutral-900 dark:text-white'
             }`}>
-              <Clock className="w-3.5 h-3.5" />
+              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-neutral-400" />
               <span>00:{secondsLeft < 10 ? `0${secondsLeft}` : secondsLeft}</span>
             </div>
           </div>
