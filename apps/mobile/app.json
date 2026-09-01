@@ -37,6 +37,9 @@
         "projectId": "5557e87b-0f1a-46c4-a05c-1a9579a2f57a"
       }
     },
-    "owner": "abdasis"
+    "owner": "abdasis",
+    "plugins": [
+      "expo-status-bar"
+    ]
   }
 }
