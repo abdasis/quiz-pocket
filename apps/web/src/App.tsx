@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { AppHeader, type AuthUser } from './app-header'
 import { QuizPlayer, type Question } from './quiz-player'
+import { DuelArena } from './duel-arena'
 import { LoginModal } from './login-modal'
 import { StatsModal } from './stats-modal'
 import { SessionHistoryModal } from './session-history-modal'
@@ -19,7 +20,8 @@ import {
   Flame,
   Gamepad2,
   CalendarDays,
-  Smartphone
+  Smartphone,
+  Swords
 } from 'lucide-react'
 
 interface LeaderboardUser {
@@ -31,6 +33,10 @@ interface LeaderboardUser {
   weekly_points: number
   quizzes_completed: number
   streak: number
+  duel_wins?: number
+  duel_losses?: number
+  duel_draws?: number
+  duel_total?: number
 }
 
 interface LiveSlotResponse {
@@ -76,6 +82,7 @@ export function App() {
   const [liveSlot, setLiveSlot] = useState<LiveSlotResponse | null>(null)
   const [secondsLeft, setSecondsLeft] = useState<number>(0)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [isPlayingDuel, setIsPlayingDuel] = useState(false)
   const [isPracticeMode, setIsPracticeMode] = useState(false)
   const [practiceQuestions, setPracticeQuestions] = useState<Question[]>([])
 
@@ -176,10 +183,21 @@ export function App() {
         setPracticeQuestions(data.questions)
         setIsPracticeMode(true)
         setIsPlaying(true)
+        setIsPlayingDuel(false)
       }
     } catch (err) {
       console.error('Failed to fetch practice questions:', err)
     }
+  }
+
+  const handleStartDuel = () => {
+    if (!user) {
+      setIsLoginModalOpen(true)
+      return
+    }
+    setIsPlaying(false)
+    setIsPracticeMode(false)
+    setIsPlayingDuel(true)
   }
 
   const formatCountdown = (secs: number) => {
@@ -208,7 +226,22 @@ export function App() {
       />
 
       <main className="flex-1 w-full max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
-        {isPlaying ? (
+        {isPlayingDuel && user ? (
+          <DuelArena
+            userEmail={user.email}
+            userName={user.name}
+            userAvatar={user.avatar_url || ''}
+            onExit={() => {
+              setIsPlayingDuel(false)
+              fetchLiveSlot()
+              fetchLeaderboard(leaderboardTab)
+            }}
+            onUserUpdate={(updated) => {
+              setUser(updated)
+              localStorage.setItem('quiz_pocket_user', JSON.stringify(updated))
+            }}
+          />
+        ) : isPlaying ? (
           <QuizPlayer
             questions={isPracticeMode ? practiceQuestions : (liveSlot?.questions || [])}
             categoryTitle={isPracticeMode ? 'Mode Latihan Mandiri' : (liveSlot?.category?.title || 'Kuis Terpadu (SD · SMP · SMA)')}
@@ -347,22 +380,42 @@ export function App() {
                       </div>
                     </div>
 
-                    <button
-                      onClick={handleStartPracticeMode}
-                      className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white dark:bg-[#1c1c22] border border-black/[0.08] dark:border-white/[0.12] text-xs font-semibold text-neutral-800 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors flex items-center justify-center gap-2 pressable"
-                    >
-                      <Gamepad2 className="w-4 h-4 text-amber-500" />
-                      Main Mode Latihan
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                      <button
+                        onClick={handleStartDuel}
+                        className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-2 pressable shadow-sm"
+                      >
+                        <Swords className="w-4 h-4" />
+                        Tanding 1 vs 1
+                      </button>
+
+                      <button
+                        onClick={handleStartPracticeMode}
+                        className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-white dark:bg-[#1c1c22] border border-black/[0.08] dark:border-white/[0.12] text-xs font-semibold text-neutral-800 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors flex items-center justify-center gap-2 pressable"
+                      >
+                        <Gamepad2 className="w-4 h-4 text-amber-500" />
+                        Mode Latihan
+                      </button>
+                    </div>
                   </div>
                 ) : (
-                  <button
-                    onClick={handleStartLiveQuiz}
-                    className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-neutral-900 hover:bg-black dark:bg-white dark:hover:bg-neutral-200 text-white dark:text-neutral-900 font-bold text-sm transition-all flex items-center justify-center gap-2.5 pressable shadow-none"
-                  >
-                    <Play className="w-4 h-4 fill-current" />
-                    Ikuti Ujian Sesi Sekarang
-                  </button>
+                  <div className="flex flex-col sm:flex-row gap-3 w-full">
+                    <button
+                      onClick={handleStartLiveQuiz}
+                      className="flex-1 sm:flex-initial px-7 py-3.5 rounded-2xl bg-neutral-900 hover:bg-black dark:bg-white dark:hover:bg-neutral-200 text-white dark:text-neutral-900 font-bold text-sm transition-all flex items-center justify-center gap-2.5 pressable shadow-none"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      Ikuti Ujian Sesi Sekarang
+                    </button>
+
+                    <button
+                      onClick={handleStartDuel}
+                      className="px-6 py-3.5 rounded-2xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 border border-indigo-200/50 dark:border-indigo-800/40 text-indigo-700 dark:text-indigo-300 font-bold text-sm transition-all flex items-center justify-center gap-2 pressable"
+                    >
+                      <Swords className="w-4 h-4" />
+                      Tanding 1 vs 1
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -532,7 +585,7 @@ export function App() {
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-1.5 mt-0.5">
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                               <span className={`text-[9px] font-medium px-1.5 py-0.2 rounded-md ${title.bgClass} ${title.colorClass} ${title.borderClass}`}>
                                 {title.title}
                               </span>
@@ -542,6 +595,11 @@ export function App() {
                                   {item.streak}d
                                 </span>
                               )}
+                              {item.duel_total && item.duel_total > 0 ? (
+                                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200/30">
+                                  ⚔️ WR {Math.round((item.duel_wins || 0) / item.duel_total * 100)}% ({item.duel_wins}M)
+                                </span>
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -566,7 +624,7 @@ export function App() {
       </main>
 
       {/* Footer with Android APK Download Link */}
-      {!isPlaying && (
+      {!isPlaying && !isPlayingDuel && (
         <footer className="w-full max-w-4xl mx-auto px-4 py-8 border-t border-black/[0.06] dark:border-white/[0.06] mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-neutral-500">
           <div className="flex items-center gap-2">
             <span className="font-bold text-neutral-900 dark:text-white">Quiz Pocket</span>

@@ -7,7 +7,12 @@ export interface AuthUser {
   name: string
   avatar_url?: string
   points?: number
+  weekly_points?: number
   streak?: number
+  duel_wins?: number
+  duel_losses?: number
+  duel_draws?: number
+  duel_total?: number
   quizzes_completed?: number
   last_active_date?: string
   sd_correct?: number

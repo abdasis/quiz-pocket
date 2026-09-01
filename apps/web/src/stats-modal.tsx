@@ -69,7 +69,13 @@ export function StatsModal({ isOpen, onClose, user }: StatsModalProps) {
               </div>
               <div>
                 <p className="text-sm font-bold text-neutral-900 dark:text-white">{user.name}</p>
-                <p className="text-xs text-neutral-400 font-mono">{user.points || 0} Total Poin</p>
+                <div className="flex items-center gap-2 text-xs text-neutral-400 font-mono">
+                  <span>{user.points || 0} Pts</span>
+                  <span>•</span>
+                  <span className="text-indigo-600 dark:text-indigo-400 font-bold">
+                    ⚔️ {user.duel_total && user.duel_total > 0 ? `${Math.round(((user.duel_wins || 0) / user.duel_total) * 100)}% WR` : '0% WR'} ({user.duel_wins || 0}M/{user.duel_total || 0}T)
+                  </span>
+                </div>
               </div>
             </div>
 

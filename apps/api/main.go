@@ -27,6 +27,10 @@ type User struct {
 	CurrentWeekKey   string    `json:"current_week_key"` // e.g. "2026-W36"
 	QuizzesCompleted int       `gorm:"default:0" json:"quizzes_completed"`
 	Streak           int       `gorm:"default:1" json:"streak"`
+	DuelWins         int       `gorm:"default:0" json:"duel_wins"`
+	DuelLosses       int       `gorm:"default:0" json:"duel_losses"`
+	DuelDraws        int       `gorm:"default:0" json:"duel_draws"`
+	DuelTotal        int       `gorm:"default:0" json:"duel_total"`
 	LastActiveDate   string    `json:"last_active_date"` // YYYY-MM-DD
 	SdCorrect        int       `gorm:"default:0" json:"sd_correct"`
 	SdTotal          int       `gorm:"default:0" json:"sd_total"`
@@ -93,6 +97,31 @@ type QuizSlotSubmission struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+// DuelMatch: Model Pertandingan 1 vs 1
+type DuelMatch struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	MatchCode      string    `gorm:"uniqueIndex;not null" json:"match_code"`
+	Player1Email   string    `gorm:"index;not null" json:"player1_email"`
+	Player1Name    string    `json:"player1_name"`
+	Player1Avatar  string    `json:"player1_avatar"`
+	Player1Score   int       `gorm:"default:0" json:"player1_score"`
+	Player1Correct int       `gorm:"default:0" json:"player1_correct"`
+	Player1Done    bool      `gorm:"default:false" json:"player1_done"`
+	Player2Email   string    `gorm:"index" json:"player2_email"`
+	Player2Name    string    `json:"player2_name"`
+	Player2Avatar  string    `json:"player2_avatar"`
+	Player2Score   int       `gorm:"default:0" json:"player2_score"`
+	Player2Correct int       `gorm:"default:0" json:"player2_correct"`
+	Player2Done    bool      `gorm:"default:false" json:"player2_done"`
+	Status         string    `gorm:"default:'waiting'" json:"status"` // waiting, matched, finished
+	WinnerEmail    string    `json:"winner_email"`
+	QuestionIDs    string    `gorm:"type:text" json:"-"`
+	QuestionsJSON  string    `gorm:"type:text" json:"-"`
+	Questions      []Question `gorm:"-" json:"questions"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
 func getISOWeekKey(t time.Time) string {
 	year, week := t.ISOWeek()
 	return fmt.Sprintf("%d-W%02d", year, week)
@@ -106,7 +135,7 @@ func main() {
 	}
 
 	// Auto-migrate schema
-	if err := db.AutoMigrate(&User{}, &Category{}, &Question{}, &QuizSession{}, &QuizSlotSubmission{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Category{}, &Question{}, &QuizSession{}, &QuizSlotSubmission{}, &DuelMatch{}); err != nil {
 		log.Fatalf("Auto-migration failed: %v", err)
 	}
 
@@ -540,6 +569,215 @@ func main() {
 			"mode":    mode, 
 			"week":    getISOWeekKey(time.Now()),
 			"data":    users,
+		})
+	})
+
+	// 9. Matchmaking 1 vs 1: Cari Lawan / Masuk Antrean Duel
+	api.Post("/duel/matchmake", func(c *fiber.Ctx) error {
+		var req struct {
+			Email     string `json:"email"`
+			Name      string `json:"name"`
+			AvatarURL string `json:"avatar_url"`
+		}
+		if err := c.BodyParser(&req); err != nil || req.Email == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "Email is required"})
+		}
+
+		var user User
+		if err := db.Where("email = ?", req.Email).First(&user).Error; err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": "User not found"})
+		}
+
+		// Cek apakah ada duel waiting dari orang lain (< 2 menit lalu)
+		twoMinsAgo := time.Now().Add(-2 * time.Minute)
+		var waitingMatch DuelMatch
+		err := db.Where("status = ? AND player1_email != ? AND created_at >= ?", "waiting", req.Email, twoMinsAgo).
+			Order("created_at ASC").
+			First(&waitingMatch).Error
+
+		if err == nil {
+			// Temukan lawan! Match up dengan player 2
+			waitingMatch.Player2Email = req.Email
+			waitingMatch.Player2Name = user.Name
+			waitingMatch.Player2Avatar = user.AvatarURL
+			waitingMatch.Status = "matched"
+			db.Save(&waitingMatch)
+
+			var qList []Question
+			if err := json.Unmarshal([]byte(waitingMatch.QuestionsJSON), &qList); err == nil {
+				waitingMatch.Questions = qList
+			}
+
+			return c.JSON(fiber.Map{
+				"success": true,
+				"matched": true,
+				"match":   waitingMatch,
+			})
+		}
+
+		// Jika tidak ada lawan waiting, cek apakah user sudah punya room waiting aktif
+		var myWaiting DuelMatch
+		err = db.Where("status = ? AND player1_email = ? AND created_at >= ?", "waiting", req.Email, twoMinsAgo).
+			First(&myWaiting).Error
+
+		if err == nil {
+			var qList []Question
+			if err := json.Unmarshal([]byte(myWaiting.QuestionsJSON), &qList); err == nil {
+				myWaiting.Questions = qList
+			}
+			return c.JSON(fiber.Map{
+				"success": true,
+				"matched": false,
+				"match":   myWaiting,
+			})
+		}
+
+		// Buat room duel baru dengan 10 butir soal seimbang (4 SD, 4 SMP, 2 SMA)
+		var sdQuestions, smpQuestions, smaQuestions []Question
+		db.Where("level = ?", "SD").Order("RANDOM()").Limit(4).Find(&sdQuestions)
+		db.Where("level = ?", "SMP").Order("RANDOM()").Limit(4).Find(&smpQuestions)
+		db.Where("level = ?", "SMA").Order("RANDOM()").Limit(2).Find(&smaQuestions)
+
+		combined := append(sdQuestions, smpQuestions...)
+		combined = append(combined, smaQuestions...)
+
+		for i := range combined {
+			var opts []string
+			if err := json.Unmarshal([]byte(combined[i].Options), &opts); err == nil {
+				combined[i].OptionsList = opts
+			}
+		}
+
+		qBytes, _ := json.Marshal(combined)
+		matchCode := fmt.Sprintf("duel_%d_%d", time.Now().UnixNano(), user.ID)
+
+		newMatch := DuelMatch{
+			MatchCode:     matchCode,
+			Player1Email:  req.Email,
+			Player1Name:   user.Name,
+			Player1Avatar: user.AvatarURL,
+			Status:        "waiting",
+			QuestionsJSON: string(qBytes),
+		}
+		if err := db.Create(&newMatch).Error; err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		newMatch.Questions = combined
+		return c.JSON(fiber.Map{
+			"success": true,
+			"matched": false,
+			"match":   newMatch,
+		})
+	})
+
+	// 10. Polling Status Duel Match
+	api.Get("/duel/status/:code", func(c *fiber.Ctx) error {
+		code := c.Params("code")
+		var match DuelMatch
+		if err := db.Where("match_code = ?", code).First(&match).Error; err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": "Match not found"})
+		}
+
+		var qList []Question
+		if err := json.Unmarshal([]byte(match.QuestionsJSON), &qList); err == nil {
+			match.Questions = qList
+		}
+
+		return c.JSON(fiber.Map{
+			"success": true,
+			"match":   match,
+		})
+	})
+
+	// 11. Submit Skor Duel 1 vs 1 & Simpan Poin serta Win Rate
+	api.Post("/duel/submit", func(c *fiber.Ctx) error {
+		var req struct {
+			MatchCode    string `json:"match_code"`
+			UserEmail    string `json:"user_email"`
+			Score        int    `json:"score"`
+			CorrectCount int    `json:"correct_count"`
+		}
+		if err := c.BodyParser(&req); err != nil || req.MatchCode == "" || req.UserEmail == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "Invalid payload"})
+		}
+
+		var match DuelMatch
+		if err := db.Where("match_code = ?", req.MatchCode).First(&match).Error; err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": "Match not found"})
+		}
+
+		isP1 := match.Player1Email == req.UserEmail
+		isP2 := match.Player2Email == req.UserEmail
+
+		if !isP1 && !isP2 {
+			return c.Status(403).JSON(fiber.Map{"error": "Unauthorized player"})
+		}
+
+		if isP1 {
+			match.Player1Score = req.Score
+			match.Player1Correct = req.CorrectCount
+			match.Player1Done = true
+		} else {
+			match.Player2Score = req.Score
+			match.Player2Correct = req.CorrectCount
+			match.Player2Done = true
+		}
+
+		// Jika kedua pemain selesai (atau status sudah matched dan submit terjadi)
+		if match.Player1Done && match.Player2Done {
+			match.Status = "finished"
+			var p1, p2 User
+			db.Where("email = ?", match.Player1Email).First(&p1)
+			db.Where("email = ?", match.Player2Email).First(&p2)
+
+			p1.DuelTotal += 1
+			p2.DuelTotal += 1
+
+			// Poin duel bertambah ke akumulasi points masing-masing
+			p1.Points += match.Player1Score
+			p1.WeeklyPoints += match.Player1Score
+			p2.Points += match.Player2Score
+			p2.WeeklyPoints += match.Player2Score
+
+			if match.Player1Score > match.Player2Score {
+				match.WinnerEmail = match.Player1Email
+				p1.DuelWins += 1
+				p2.DuelLosses += 1
+				// Bonus kemenangan 50 pts untuk pemenang
+				p1.Points += 50
+				p1.WeeklyPoints += 50
+			} else if match.Player2Score > match.Player1Score {
+				match.WinnerEmail = match.Player2Email
+				p2.DuelWins += 1
+				p1.DuelLosses += 1
+				p2.Points += 50
+				p2.WeeklyPoints += 50
+			} else {
+				match.WinnerEmail = "draw"
+				p1.DuelDraws += 1
+				p2.DuelDraws += 1
+				// Bonus seri 20 pts masing-masing
+				p1.Points += 20
+				p1.WeeklyPoints += 20
+				p2.Points += 20
+				p2.WeeklyPoints += 20
+			}
+
+			db.Save(&p1)
+			db.Save(&p2)
+		}
+
+		db.Save(&match)
+
+		var qList []Question
+		if err := json.Unmarshal([]byte(match.QuestionsJSON), &qList); err == nil {
+			match.Questions = qList
+		}
+
+		return c.JSON(fiber.Map{
+			"success": true,
+			"match":   match,
 		})
 	})
 
