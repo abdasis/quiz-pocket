@@ -34,6 +34,7 @@ type Category struct {
 	Slug          string    `gorm:"uniqueIndex;not null" json:"slug"`
 	Title         string    `gorm:"not null" json:"title"`
 	Description   string    `json:"description"`
+	Level         string    `json:"level"`
 	Icon          string    `json:"icon"`
 	QuestionCount int       `json:"question_count"`
 	CreatedAt     time.Time `json:"created_at"`
@@ -48,7 +49,7 @@ type Question struct {
 	OptionsList []string  `gorm:"-" json:"options"`
 	AnswerIndex int       `json:"answer_index"`
 	Explanation string    `json:"explanation"`
-	Difficulty  string    `json:"difficulty"`
+	Level       string    `json:"level"` // "SD", "SMP", "SMA"
 	Points      int       `json:"points"`
 	CreatedAt   time.Time `json:"created_at"`
 }
@@ -81,12 +82,12 @@ func main() {
 
 	var qCount int64
 	db.Model(&Question{}).Count(&qCount)
-	if qCount < 20 {
+	if qCount == 0 {
 		seedDatabase(db)
 	}
 
 	app := fiber.New(fiber.Config{
-		AppName: "Quiz Pocket API v1.0",
+		AppName: "Quiz Pocket API (SD-SMP-SMA)",
 	})
 
 	app.Use(cors.New(cors.Config{
@@ -144,7 +145,7 @@ func main() {
 		})
 	})
 
-	// 2. User Profile & Stats
+	// 2. User Profile
 	api.Get("/user/profile", func(c *fiber.Ctx) error {
 		email := c.Query("email")
 		if email == "" {
@@ -161,7 +162,6 @@ func main() {
 	api.Get("/live-slot", func(c *fiber.Ctx) error {
 		userEmail := c.Query("email")
 		now := time.Now()
-		// Slot duration = 30 minutes (1800 seconds)
 		const slotDurationSec int64 = 1800
 		currentUnix := now.Unix()
 		slotID := currentUnix / slotDurationSec
@@ -169,7 +169,6 @@ func main() {
 		slotEndTime := time.Unix((slotID+1)*slotDurationSec, 0)
 		secondsRemaining := slotEndTime.Unix() - currentUnix
 
-		// Pick deterministic rotating category for this slot
 		var categories []Category
 		db.Find(&categories)
 		if len(categories) == 0 {
@@ -178,11 +177,10 @@ func main() {
 		catIndex := int(slotID % int64(len(categories)))
 		activeCategory := categories[catIndex]
 
-		// Fetch deterministic questions for this slot
+		// Fetch questions for this category
 		var allQuestions []Question
 		db.Where("category_id = ?", activeCategory.ID).Order("id ASC").Find(&allQuestions)
 
-		// Select 5 questions deterministically using hash of slotID
 		var slotQuestions []Question
 		if len(allQuestions) > 0 {
 			h := sha256.New()
@@ -206,7 +204,6 @@ func main() {
 			}
 		}
 
-		// Check if current user already completed this slot
 		var submission QuizSlotSubmission
 		isCompleted := false
 		if userEmail != "" {
@@ -229,7 +226,7 @@ func main() {
 		})
 	})
 
-	// 4. Submit Live 30-Minute Slot
+	// 4. Submit Live Slot
 	api.Post("/live-slot/submit", func(c *fiber.Ctx) error {
 		var req struct {
 			SlotID       int64  `json:"slot_id"`
@@ -243,11 +240,10 @@ func main() {
 			return c.Status(400).JSON(fiber.Map{"error": "Invalid payload"})
 		}
 
-		// Verify slot validity (prevent submitting expired slot)
 		const slotDurationSec int64 = 1800
 		currentSlotID := time.Now().Unix() / slotDurationSec
 		if req.SlotID != currentSlotID {
-			return c.Status(400).JSON(fiber.Map{"error": "Waktu kuis sesi ini sudah habis. Silakan ikuti sesi kuis berikutnya."})
+			return c.Status(400).JSON(fiber.Map{"error": "Waktu sesi kuis telah berakhir. Silakan ikuti sesi selanjutnya."})
 		}
 
 		var user User
@@ -255,13 +251,11 @@ func main() {
 			return c.Status(404).JSON(fiber.Map{"error": "User not found"})
 		}
 
-		// Check if already submitted for this slot
 		var existing QuizSlotSubmission
 		if err := db.Where("slot_id = ? AND user_id = ?", req.SlotID, user.ID).First(&existing).Error; err == nil {
-			return c.Status(400).JSON(fiber.Map{"error": "Anda sudah menyelesaikan kuis sesi 30 menit ini!"})
+			return c.Status(400).JSON(fiber.Map{"error": "Kuis sesi ini sudah Anda kerjakan!"})
 		}
 
-		// Save submission
 		submission := QuizSlotSubmission{
 			SlotID:       req.SlotID,
 			UserID:       user.ID,
@@ -276,7 +270,6 @@ func main() {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
 
-		// Add score to user points & increment completed
 		user.Points += req.Score
 		user.QuizzesCompleted += 1
 		db.Save(&user)
@@ -296,23 +289,6 @@ func main() {
 		return c.JSON(fiber.Map{"success": true, "data": users})
 	})
 
-	// 6. Categories List
-	api.Get("/categories", func(c *fiber.Ctx) error {
-		var cats []Category
-		db.Find(&cats)
-		for i := range cats {
-			var count int64
-			db.Model(&Question{}).Where("category_id = ?", cats[i].ID).Count(&count)
-			cats[i].QuestionCount = int(count)
-		}
-		return c.JSON(fiber.Map{"success": true, "data": cats})
-	})
-
-	// 7. Health Check
-	api.Get("/health", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"status": "ok", "app": "Quiz Pocket API (30-Min Rotator)", "timestamp": time.Now()})
-	})
-
 	// Static Web Frontend Serving
 	app.Static("/assets", "/home/abdasis/Projects/quiz-pocket/apps/web/dist/assets")
 	app.Get("/*", func(c *fiber.Ctx) error {
@@ -327,63 +303,179 @@ func main() {
 	if port == "" {
 		port = "8089"
 	}
-	fmt.Printf("Quiz Pocket 30-Min Server running on :%s\n", port)
+	fmt.Printf("Quiz Pocket Server running on :%s\n", port)
 	log.Fatal(app.Listen(":" + port))
 }
 
 func seedDatabase(db *gorm.DB) {
 	categories := []Category{
-		{Slug: "islamic-basic", Title: "Pendidikan Agama Islam", Description: "Rukun Iman, Rukun Islam, Sejarah Nabi & Sahabat", Icon: "BookOpen"},
-		{Slug: "web-dev", Title: "Web & Frontend Engineering", Description: "HTML/CSS, React, TypeScript, Tailwind & Browser API", Icon: "Code"},
-		{Slug: "backend-go", Title: "Backend & Golang Mastery", Description: "Go Fiber, Concurrency, REST API, Database & Architecture", Icon: "Server"},
-		{Slug: "general-logic", Title: "Logika & Algoritma", Description: "Pemecahan masalah, pola angka, struktur data & penalaran", Icon: "Cpu"},
+		{Slug: "wawasan-sd", Title: "Pengetahuan Umum & Sains Dasar (Tingkat SD)", Description: "Organ tubuh, rantai makanan, tata surya, dan flora fauna", Level: "SD", Icon: "Globe"},
+		{Slug: "wawasan-smp", Title: "Wawasan Nusantara & Geografi (Tingkat SMP)", Description: "Sejarah nasional, peta wilayah, iklim, dan fenomena alam", Level: "SMP", Icon: "Compass"},
+		{Slug: "wawasan-sma", Title: "Logika Kritis, Finansial & Sains Praktis (Tingkat SMA)", Description: "Ekonomi praktis, hukum fisika sehari-hari, dan nalar kritis", Level: "SMA", Icon: "Lightbulb"},
 	}
 
 	for _, c := range categories {
-		var existing Category
-		if err := db.Where("slug = ?", c.Slug).First(&existing).Error; err != nil {
-			db.Create(&c)
-		}
+		db.Create(&c)
 	}
 
-	var catIslam, catWeb, catGo, catLogic Category
-	db.Where("slug = ?", "islamic-basic").First(&catIslam)
-	db.Where("slug = ?", "web-dev").First(&catWeb)
-	db.Where("slug = ?", "backend-go").First(&catGo)
-	db.Where("slug = ?", "general-logic").First(&catLogic)
+	var catSD, catSMP, catSMA Category
+	db.Where("slug = ?", "wawasan-sd").First(&catSD)
+	db.Where("slug = ?", "wawasan-smp").First(&catSMP)
+	db.Where("slug = ?", "wawasan-sma").First(&catSMA)
 
 	questions := []Question{
-		// Islam
-		{CategoryID: catIslam.ID, Question: "Berapa jumlah rukun iman dalam ajaran Islam?", Options: `["4", "5", "6", "7"]`, AnswerIndex: 2, Explanation: "Rukun Iman ada 6: Iman kepada Allah, Malaikat, Kitab, Rasul, Hari Akhir, dan Qada & Qadar.", Difficulty: "easy", Points: 10},
-		{CategoryID: catIslam.ID, Question: "Surah apa yang disebut sebagai 'Ummul Kitab' atau 'Ummul Qur'an'?", Options: `["Al-Baqarah", "Al-Fatihah", "Yasin", "Al-Ikhlas"]`, AnswerIndex: 1, Explanation: "Surah Al-Fatihah disebut Ummul Kitab karena mencakup inti pesan Al-Qur'an.", Difficulty: "easy", Points: 10},
-		{CategoryID: catIslam.ID, Question: "Siapakah Sahabat Nabi yang menemani beliau hijrah dan bersembunyi di Gua Tsur?", Options: `["Umar bin Khattab", "Ali bin Abi Thalib", "Abu Bakar Ash-Shiddiq", "Utsman bin Affan"]`, AnswerIndex: 2, Explanation: "Abu Bakar Ash-Shiddiq RA adalah sahabat yang menemani Rasulullah ﷺ dalam perjalanan hijrah.", Difficulty: "medium", Points: 10},
-		{CategoryID: catIslam.ID, Question: "Mushaf Al-Qur'an standar Madani Raja Fahd umumnya terdiri dari berapa baris per halaman?", Options: `["13 Baris", "15 Baris", "17 Baris", "18 Baris"]`, AnswerIndex: 1, Explanation: "Mushaf Madani Rasm Utsmani standar King Fahd Complex memiliki format 15 baris per halaman.", Difficulty: "medium", Points: 10},
-		{CategoryID: catIslam.ID, Question: "Nabi yang memiliki mukjizat dapat berbicara dengan hewan dan mengendalikan angin adalah?", Options: `["Nabi Daud AS", "Nabi Sulaiman AS", "Nabi Musa AS", "Nabi Yusuf AS"]`, AnswerIndex: 1, Explanation: "Nabi Sulaiman 'alaihissalam dikaruniai kemampuan memahami bahasa hewan dan memerintah angin serta jin.", Difficulty: "easy", Points: 10},
-		{CategoryID: catIslam.ID, Question: "Bulan ke-9 dalam kalender Hijriyah di mana umat Islam diwajibkan berpuasa adalah?", Options: `["Sya'ban", "Ramadhan", "Syawwal", "Muharram"]`, AnswerIndex: 1, Explanation: "Bulan Ramadhan adalah bulan ke-9 dalam kalender Hijriyah.", Difficulty: "easy", Points: 10},
+		// SD Questions
+		{
+			CategoryID:  catSD.ID,
+			Question:    "Hewan apa yang bernapas menggunakan insang saat masih berbentuk berudu, lalu menggunakan paru-paru dan kulit saat dewasa?",
+			Options:     `["Katak", "Ikan Mas", "Kura-kura", "Buaya"]`,
+			AnswerIndex: 0,
+			Explanation: "Katak mengalami metamorfosis: bernapas dengan insang saat berudu, lalu dengan paru-paru dan kulit saat dewasa.",
+			Level:       "SD",
+			Points:      10,
+		},
+		{
+			CategoryID:  catSD.ID,
+			Question:    "Planet terbesar di tata surya kita yang memiliki julukan planet raksasa gas adalah?",
+			Options:     `["Mars", "Saturnus", "Jupiter", "Bumi"]`,
+			AnswerIndex: 2,
+			Explanation: "Jupiter adalah planet terbesar di tata surya dengan diameter lebih dari 11 kali diameter Bumi.",
+			Level:       "SD",
+			Points:      10,
+		},
+		{
+			CategoryID:  catSD.ID,
+			Question:    "Proses pembuatan makanan pada tumbuhan hijau dengan bantuan cahaya matahari dinamakan?",
+			Options:     `["Respirasi", "Fotosintesis", "Fermentasi", "Transpirasi"]`,
+			AnswerIndex: 1,
+			Explanation: "Fotosintesis adalah proses di mana klorofil tumbuhan memanfaatkan sinar matahari untuk mengubah air dan karbon dioksida menjadi glukosa dan oksigen.",
+			Level:       "SD",
+			Points:      10,
+		},
+		{
+			CategoryID:  catSD.ID,
+			Question:    "Bagian darah yang bertugas membekukan darah saat kita terluka agar pendarahan berhenti adalah?",
+			Options:     `["Sel darah merah (Eritrosit)", "Sel darah putih (Leukosit)", "Keping darah (Trombosit)", "Plasma darah"]`,
+			AnswerIndex: 2,
+			Explanation: "Trombosit (keping darah) berfungsi penting dalam proses pembekuan darah untuk menutup luka.",
+			Level:       "SD",
+			Points:      10,
+		},
+		{
+			CategoryID:  catSD.ID,
+			Question:    "Berapa jumlah provinsi di Indonesia saat ini setelah pemekaran wilayah Papua?",
+			Options:     `["34 Provinsi", "36 Provinsi", "38 Provinsi", "40 Provinsi"]`,
+			AnswerIndex: 2,
+			Explanation: "Indonesia memiliki 38 provinsi setelah pembentukan 4 Daerah Otonom Baru (DOB) di wilayah Papua.",
+			Level:       "SD",
+			Points:      10,
+		},
+		{
+			CategoryID:  catSD.ID,
+			Question:    "Garis khayal yang membagi bumi menjadi belahan bumi utara dan selatan disebut garis?",
+			Options:     `["Khatulistiwa (Ekuator)", "Bujur", "Meridian", "Kutub"]`,
+			AnswerIndex: 0,
+			Explanation: "Garis Khatulistiwa (Ekuator) melintasi lintang 0 derajat dan membagi bumi menjadi belahan utara dan selatan.",
+			Level:       "SD",
+			Points:      10,
+		},
 
-		// Web Dev
-		{CategoryID: catWeb.ID, Question: "Unit CSS apa yang dinamis menyesuaikan tinggi viewport saat mobile browser address bar muncul/hilang?", Options: `["vh", "100vh", "100dvh", "100lvh"]`, AnswerIndex: 2, Explanation: "100dvh (dynamic viewport height) menyesuaikan tinggi viewport dinamis pada peramban mobile.", Difficulty: "medium", Points: 10},
-		{CategoryID: catWeb.ID, Question: "Apa fungsi dari `scrollbar-gutter: stable` pada CSS?", Options: `["Menghilangkan scrollbar", "Mencegah pergeseran tata letak (Layout Shift)", "Membuat scrollbar transparan", "Mengunci mouse scroll"]`, AnswerIndex: 1, Explanation: "scrollbar-gutter: stable mencadangkan ruang scrollbar agar layout tidak berguncang saat konten bertambah.", Difficulty: "medium", Points: 10},
-		{CategoryID: catWeb.ID, Question: "Berdasarkan Apple HIG, berapa ukuran minimum touch target untuk navigasi ramah jari?", Options: `["24x24px", "32x32px", "44x44px", "64x64px"]`, AnswerIndex: 2, Explanation: "Apple HIG merekomendasikan touch target minimal 44x44 points/pixels.", Difficulty: "easy", Points: 10},
-		{CategoryID: catWeb.ID, Question: "Di React 19, hook apa yang diperkenalkan untuk menangani async transition dan pending state secara native?", Options: `["useActionState", "useAsyncEffect", "usePromise", "useFetch"]`, AnswerIndex: 0, Explanation: "useActionState adalah hook resmi React 19 untuk mengelola form actions dan status async pending.", Difficulty: "medium", Points: 10},
-		{CategoryID: catWeb.ID, Question: "Atribut rel apa yang penting disertakan saat menggunakan target='_blank' pada tag <a>?", Options: `["rel='nofollow'", "rel='noopener noreferrer'", "rel='preload'", "rel='canonical'"]`, AnswerIndex: 1, Explanation: "rel='noopener noreferrer' mencegah tab baru mengakses window.opener untuk keamanan isolasi proses.", Difficulty: "easy", Points: 10},
+		// SMP Questions
+		{
+			CategoryID:  catSMP.ID,
+			Question:    "Selat yang memisahkan antara Pulau Jawa dan Pulau Sumatera adalah?",
+			Options:     `["Selat Malaka", "Selat Sunda", "Selat Bali", "Selat Makassar"]`,
+			AnswerIndex: 1,
+			Explanation: "Selat Sunda adalah selat penghubung antara Laut Jawa dan Samudra Hindia yang memisahkan Pulau Jawa dan Sumatera.",
+			Level:       "SMP",
+			Points:      10,
+		},
+		{
+			CategoryID:  catSMP.ID,
+			Question:    "Peristiwa proklamasi kemerdekaan Indonesia pada tanggal 17 Agustus 1945 dibacakan di Jalan?",
+			Options:     `["Pegangsaan Timur No. 56", "Imam Bonjol No. 1", "Medan Merdeka Barat", "Salemba Raya No. 4"]`,
+			AnswerIndex: 0,
+			Explanation: "Naskah proklamasi dibacakan oleh Ir. Soekarno di kediamannya di Jalan Pegangsaan Timur No. 56, Jakarta Pusat.",
+			Level:       "SMP",
+			Points:      10,
+		},
+		{
+			CategoryID:  catSMP.ID,
+			Question:    "Mengapa rel kereta api selalu diberi celah kecil di antara sambungan batangnya?",
+			Options:     `["Mengurangi kebisingan roda", "Memberi ruang pemuaian rel saat suhu panas", "Mempermudah pergantian rel", "Mencegah kereta tergelincir"]`,
+			AnswerIndex: 1,
+			Explanation: "Besi rel memuai saat terkena panas matahari. Celah dibuat agar rel tidak membengkok akibat pemuaian.",
+			Level:       "SMP",
+			Points:      10,
+		},
+		{
+			CategoryID:  catSMP.ID,
+			Question:    "Danau vulkanik terbesar di Indonesia sekaligus di Asia Tenggara adalah?",
+			Options:     `["Danau Singkarak", "Danau Poso", "Danau Toba", "Danau Matano"]`,
+			AnswerIndex: 2,
+			Explanation: "Danau Toba di Sumatera Utara merupakan danau hasil letusan supervolcano terbesar di dunia.",
+			Level:       "SMP",
+			Points:      10,
+		},
+		{
+			CategoryID:  catSMP.ID,
+			Question:    "Hukum gerak benda yang menyatakan bahwa setiap aksi akan menimbulkan reaksi yang sama besar dan berlawanan arah adalah?",
+			Options:     `["Hukum Newton I", "Hukum Newton II", "Hukum Newton III", "Hukum Archimedes"]`,
+			AnswerIndex: 2,
+			Explanation: "Hukum Newton III menyatakan F_aksi = -F_reaksi (gaya aksi selalu berpasangan dengan gaya reaksi berlawanan).",
+			Level:       "SMP",
+			Points:      10,
+		},
 
-		// Backend & Go
-		{CategoryID: catGo.ID, Question: "Bagaimana pola idiomatik mendengarkan pembatalan context di dalam loop goroutine di Go?", Options: `["try-catch block", "switch case ctx.Done()", "select { case <-ctx.Done(): return }", "runtime.GC()"]`, AnswerIndex: 2, Explanation: "Statement select dengan case <-ctx.Done() adalah pola standar Go menangani pembatalan context.", Difficulty: "medium", Points: 10},
-		{CategoryID: catGo.ID, Question: "Di Go Fiber, di mana middleware CORS sebaiknya didaftarkan?", Options: `["Setelah semua route selesai", "Sebelum handler route didaftarkan", "Di goroutine terpisah", "Di fungsi init DB"]`, AnswerIndex: 1, Explanation: "Middleware CORS harus didaftarkan di awal sebelum routes agar preflight OPTIONS tertangani.", Difficulty: "easy", Points: 10},
-		{CategoryID: catGo.ID, Question: "Apa tipe data bawaan Go yang aman untuk sharing data antar goroutine tanpa explicit mutex lock?", Options: `["Slice", "Map", "Channel", "Pointer"]`, AnswerIndex: 2, Explanation: "Channel di Go dirancang untuk komunikasi thread-safe antargoroutine ('Do not communicate by sharing memory; instead, share memory by communicating').", Difficulty: "easy", Points: 10},
-		{CategoryID: catGo.ID, Question: "Keyword apa di Go yang digunakan untuk menunda eksekusi fungsi hingga fungsi pembungkusnya selesai?", Options: `["defer", "delay", "sleep", "yield"]`, AnswerIndex: 0, Explanation: "defer menunda eksekusi instruksi (misal closing file/database) sampai fungsi di sekelilingnya me-return nilai.", Difficulty: "easy", Points: 10},
-
-		// Logic
-		{CategoryID: catLogic.ID, Question: "Lanjutkan deret pola bilangan berikut: 2, 6, 12, 20, 30, ...?", Options: `["38", "40", "42", "44"]`, AnswerIndex: 2, Explanation: "Pola selisih: +4, +6, +8, +10, +12. Maka 30 + 12 = 42.", Difficulty: "easy", Points: 10},
-		{CategoryID: catLogic.ID, Question: "Berapa kompleksitas waktu (Big-O) rata-rata Binary Search pada array terurut?", Options: `["O(1)", "O(n)", "O(log n)", "O(n log n)"]`, AnswerIndex: 2, Explanation: "Binary search membagi ruang pencarian menjadi setengah pada tiap iterasinya, menghasilkan O(log n).", Difficulty: "easy", Points: 10},
-		{CategoryID: catLogic.ID, Question: "Jika 5 mesin dapat membuat 5 barang dalam 5 menit, berapa menit yang dibutuhkan 100 mesin untuk membuat 100 barang?", Options: `["5 Menit", "20 Menit", "50 Menit", "100 Menit"]`, AnswerIndex: 0, Explanation: "1 mesin membutuhkan 5 menit untuk membuat 1 barang. Maka 100 mesin membuat 100 barang secara paralel tetap dalam 5 menit.", Difficulty: "medium", Points: 10},
+		// SMA Questions
+		{
+			CategoryID:  catSMA.ID,
+			Question:    "Kenaikan harga barang dan jasa secara umum dan terus menerus dalam jangka waktu tertentu dalam istilah ekonomi disebut?",
+			Options:     `["Deflasi", "Inflasi", "Devaluasi", "Resesi"]`,
+			AnswerIndex: 1,
+			Explanation: "Inflasi adalah kecenderungan naiknya harga kebutuhan pokok dan barang/jasa secara umum yang menurunkan daya beli uang.",
+			Level:       "SMA",
+			Points:      10,
+		},
+		{
+			CategoryID:  catSMA.ID,
+			Question:    "Mengapa rem kendaraan bermotor lebih cepat terasa panas dan aus saat menuruni jalan pegunungan yang curam?",
+			Options:     `["Gesekan mengubah energi kinetik menjadi energi termal (panas)", "Udara di pegunungan lebih tipis", "Gravitasi merusak piringan rem", "Minyak rem mudah menguap"]`,
+			AnswerIndex: 0,
+			Explanation: "Berdasarkan hukum kekekalan energi, sistem pengereman meredam laju kendaraan dengan mengubah energi gerak (kinetik) menjadi energi panas (termal) melalui gesekan.",
+			Level:       "SMA",
+			Points:      10,
+		},
+		{
+			CategoryID:  catSMA.ID,
+			Question:    "Manakah konsep pengelolaan keuangan pribadi yang membagi penghasilan menjadi 50% Kebutuhan Pokok, 30% Keinginan, dan 20% Tabungan/Investasi?",
+			Options:     `["Aturan Pareto 80/20", "Metode 50/30/20", "Aturan 70/20/10", "Zero-Based Budgeting"]`,
+			AnswerIndex: 1,
+			Explanation: "Metode budgeting 50/30/20 dipopulerkan untuk menjaga kesehatan arus kas pribadi antara kebutuhan harian dan masa depan.",
+			Level:       "SMA",
+			Points:      10,
+		},
+		{
+			CategoryID:  catSMA.ID,
+			Question:    "Gas rumah kaca di atmosfer yang paling banyak dihasilkan dari pembakaran bahan bakar fosil oleh kendaraan dan industri adalah?",
+			Options:     `["Oksigen (O2)", "Karbon Dioksida (CO2)", "Helium (He)", "Nitrogen (N2)"]`,
+			AnswerIndex: 1,
+			Explanation: "Karbon Dioksida (CO2) adalah gas buang utama pembakaran fosil yang memerangkap panas di atmosfer dan memicu pemanasan global.",
+			Level:       "SMA",
+			Points:      10,
+		},
+		{
+			CategoryID:  catSMA.ID,
+			Question:    "Saat berenang di laut, tubuh kita terasa lebih mudah mengapung dibandingkan di kolam renang air tawar. Mengapa?",
+			Options:     `["Air laut memiliki massa jenis lebih tinggi karena kandungan garam", "Suhu air laut lebih hangat", "Ombak laut mendorong tubuh ke atas", "Tekanan udara di pantai lebih rendah"]`,
+			AnswerIndex: 0,
+			Explanation: "Sesuai hukum Archimedes, gaya apung berbanding lurus dengan massa jenis zat cair. Air garam memiliki massa jenis lebih besar daripada air tawar.",
+			Level:       "SMA",
+			Points:      10,
+		},
 	}
 
 	for _, q := range questions {
-		var existing Question
-		if err := db.Where("question = ?", q.Question).First(&existing).Error; err != nil {
-			db.Create(&q)
-		}
+		db.Create(&q)
 	}
 }

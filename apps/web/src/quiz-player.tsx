@@ -9,7 +9,7 @@ export interface Question {
   options: string[]
   answer_index: number
   explanation: string
-  difficulty: string
+  level?: string
   points: number
 }
 
@@ -186,7 +186,7 @@ export function QuizPlayer({
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60">
-              {currentQ.difficulty || 'Live'}
+              {currentQ.level ? `Tingkat ${currentQ.level}` : 'Umum'}
             </span>
             <span className="text-xs font-semibold text-neutral-400">+{currentQ.points || 10} Poin</span>
           </div>
