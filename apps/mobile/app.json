@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Quiz Pocket",
+    "slug": "quiz-pocket",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#000000"
+      },
+      "package": "my.id.abdasis.quizpocket"
+    }
+  }
+}
