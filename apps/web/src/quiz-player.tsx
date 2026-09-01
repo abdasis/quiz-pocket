@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowRight, RotateCcw, Award, Clock, Sparkles, Check, X, ArrowLeft, ShieldAlert, AlertTriangle, Share2, Copy, CheckCheck, Zap } from 'lucide-react'
+import { ArrowRight, RotateCcw, Award, Clock, Sparkles, Check, X, ArrowLeft, ShieldAlert, AlertTriangle, Share2, Copy, CheckCheck, Zap, RefreshCw } from 'lucide-react'
 import confetti from 'canvas-confetti'
 
 export interface Question {
@@ -11,6 +11,22 @@ export interface Question {
   explanation: string
   level?: string
   points: number
+}
+
+interface SavedExamState {
+  slotId: number
+  currentIndex: number
+  selectedOption: number | null
+  isAnswered: boolean
+  score: number
+  correctCount: number
+  questionDeadlineUnix: number
+  combo: number
+  maxCombo: number
+  sdStats: { correct: number; total: number }
+  smpStats: { correct: number; total: number }
+  smaStats: { correct: number; total: number }
+  tabSwitches: number
 }
 
 interface QuizPlayerProps {
@@ -35,6 +51,7 @@ interface QuizPlayerProps {
 }
 
 export function QuizPlayer({
+  slotId,
   categoryTitle,
   questions,
   isPracticeMode = false,
@@ -42,36 +59,134 @@ export function QuizPlayer({
   onFinish,
   onExit,
 }: QuizPlayerProps) {
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [selectedOption, setSelectedOption] = useState<number | null>(null)
-  const [isAnswered, setIsAnswered] = useState(false)
-  const [score, setScore] = useState(0)
-  const [correctCount, setCorrectCount] = useState(0)
-  const [secondsLeft, setSecondsLeft] = useState(30)
+  const storageKey = `quiz_pocket_session_state_${slotId}`
+
+  // Load saved state or initialize
+  const loadInitialState = (): SavedExamState => {
+    if (!isPracticeMode) {
+      const saved = localStorage.getItem(storageKey)
+      if (saved) {
+        try {
+          const parsed: SavedExamState = JSON.parse(saved)
+          if (parsed.slotId === slotId && parsed.currentIndex < questions.length) {
+            return parsed
+          }
+        } catch {
+          // ignore corrupted json
+        }
+      }
+    }
+    return {
+      slotId,
+      currentIndex: 0,
+      selectedOption: null,
+      isAnswered: false,
+      score: 0,
+      correctCount: 0,
+      questionDeadlineUnix: Date.now() + 30 * 1000,
+      combo: 0,
+      maxCombo: 0,
+      sdStats: { correct: 0, total: 0 },
+      smpStats: { correct: 0, total: 0 },
+      smaStats: { correct: 0, total: 0 },
+      tabSwitches: 0,
+    }
+  }
+
+  const initial = loadInitialState()
+
+  const [currentIndex, setCurrentIndex] = useState(initial.currentIndex)
+  const [selectedOption, setSelectedOption] = useState<number | null>(initial.selectedOption)
+  const [isAnswered, setIsAnswered] = useState(initial.isAnswered)
+  const [score, setScore] = useState(initial.score)
+  const [correctCount, setCorrectCount] = useState(initial.correctCount)
+  const [questionDeadline, setQuestionDeadline] = useState(initial.questionDeadlineUnix)
+  const [secondsLeft, setSecondsLeft] = useState(() => {
+    if (initial.isAnswered) return 0
+    const diff = Math.max(0, Math.ceil((initial.questionDeadlineUnix - Date.now()) / 1000))
+    return diff
+  })
   const [isCompleted, setIsCompleted] = useState(false)
 
   // Combo & Speed Bonus States
-  const [combo, setCombo] = useState(0)
-  const [maxCombo, setMaxCombo] = useState(0)
+  const [combo, setCombo] = useState(initial.combo)
+  const [maxCombo, setMaxCombo] = useState(initial.maxCombo)
   const [showFeedbackBadge, setShowFeedbackBadge] = useState<string | null>(null)
 
   // Level breakdowns
-  const [sdStats, setSdStats] = useState({ correct: 0, total: 0 })
-  const [smpStats, setSmpStats] = useState({ correct: 0, total: 0 })
-  const [smaStats, setSmaStats] = useState({ correct: 0, total: 0 })
+  const [sdStats, setSdStats] = useState(initial.sdStats)
+  const [smpStats, setSmpStats] = useState(initial.smpStats)
+  const [smaStats, setSmaStats] = useState(initial.smaStats)
 
   // Anti-Cheat States
-  const [tabSwitches, setTabSwitches] = useState(0)
+  const [tabSwitches, setTabSwitches] = useState(initial.tabSwitches)
   const [showWarning, setShowWarning] = useState<string | null>(null)
   const [isDisqualified, setIsDisqualified] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
   const isCompletedRef = useRef(false)
   isCompletedRef.current = isCompleted
 
-  const currentQ = questions[currentIndex]
+  const currentQ = questions[currentIndex] || questions[0]
   const progressPercent = Math.round(((currentIndex + 1) / questions.length) * 100)
 
-  // 1. Anti-Cheat: Visibility Change & Blur Detection (Only in Live Exam)
+  // Auto-Save Continuous State to LocalStorage (Persist across refresh/exit)
+  useEffect(() => {
+    if (isPracticeMode || isCompleted) return
+
+    const stateToSave: SavedExamState = {
+      slotId,
+      currentIndex,
+      selectedOption,
+      isAnswered,
+      score,
+      correctCount,
+      questionDeadlineUnix: questionDeadline,
+      combo,
+      maxCombo,
+      sdStats,
+      smpStats,
+      smaStats,
+      tabSwitches,
+    }
+    localStorage.setItem(storageKey, JSON.stringify(stateToSave))
+  }, [
+    slotId,
+    currentIndex,
+    selectedOption,
+    isAnswered,
+    score,
+    correctCount,
+    questionDeadline,
+    combo,
+    maxCombo,
+    sdStats,
+    smpStats,
+    smaStats,
+    tabSwitches,
+    isPracticeMode,
+    isCompleted,
+  ])
+
+  // Continuous Clock Sync (Wall-clock Date.now based, continues even if tab is closed)
+  useEffect(() => {
+    if (isAnswered || isCompleted || isDisqualified) return
+
+    const timer = setInterval(() => {
+      const remainingSec = Math.max(0, Math.ceil((questionDeadline - Date.now()) / 1000))
+      setSecondsLeft(remainingSec)
+
+      if (remainingSec <= 0) {
+        clearInterval(timer)
+        setIsAnswered(true)
+        setCombo(0)
+        setShowFeedbackBadge('Waktu Habis!')
+      }
+    }, 250)
+
+    return () => clearInterval(timer)
+  }, [questionDeadline, isAnswered, isCompleted, isDisqualified])
+
+  // Anti-Cheat: Visibility Change & Blur Detection
   useEffect(() => {
     if (isPracticeMode) return
 
@@ -82,21 +197,7 @@ export function QuizPlayer({
           if (nextCount >= 3) {
             setIsDisqualified(true)
           } else {
-            setShowWarning(`Peringatan: Berpindah tab/aplikasi terdeteksi! (${nextCount}/3). Kuis akan didiskualifikasi jika mengulang lagi.`)
-          }
-          return nextCount
-        })
-      }
-    }
-
-    const handleWindowBlur = () => {
-      if (!isCompletedRef.current && !isDisqualified) {
-        setTabSwitches((prev) => {
-          const nextCount = prev + 1
-          if (nextCount >= 3) {
-            setIsDisqualified(true)
-          } else {
-            setShowWarning(`Fokus ujian hilang. Jangan berpindah jendela/aplikasi! (${nextCount}/3).`)
+            setShowWarning(`Peringatan: Berpindah jendela/tab terdeteksi (${nextCount}/3). Timer tetap berjalan secara server-sync!`)
           }
           return nextCount
         })
@@ -122,41 +223,15 @@ export function QuizPlayer({
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('blur', handleWindowBlur)
     window.addEventListener('contextmenu', handleContextMenu)
     window.addEventListener('keydown', handleKeyDown)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('blur', handleWindowBlur)
       window.removeEventListener('contextmenu', handleContextMenu)
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [isDisqualified, isPracticeMode])
-
-  // Countdown timer per question
-  useEffect(() => {
-    if (isAnswered || isCompleted || isDisqualified) return
-
-    const timer = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          handleTimeOut()
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [currentIndex, isAnswered, isCompleted, isDisqualified])
-
-  const handleTimeOut = () => {
-    setIsAnswered(true)
-    setCombo(0)
-    setShowFeedbackBadge('Waktu Habis!')
-  }
 
   const handleSelectOption = (idx: number) => {
     if (isAnswered || isDisqualified) return
@@ -176,13 +251,11 @@ export function QuizPlayer({
     }
 
     if (isCorrect) {
-      // Speed Bonus: Jawab cepat dalam < 5 detik pertama (secondsLeft >= 25)
       let speedBonus = 0
       if (secondsLeft >= 25) {
-        speedBonus = 5 // Bonus +5 poin
+        speedBonus = 5
       }
 
-      // Combo System
       const nextCombo = combo + 1
       setCombo(nextCombo)
       if (nextCombo > maxCombo) {
@@ -213,13 +286,17 @@ export function QuizPlayer({
 
   const handleNextQuestion = () => {
     if (currentIndex < questions.length - 1) {
-      setCurrentIndex((prev) => prev + 1)
+      const nextIdx = currentIndex + 1
+      const nextDeadline = Date.now() + 30 * 1000
+      setCurrentIndex(nextIdx)
       setSelectedOption(null)
       setIsAnswered(false)
       setShowFeedbackBadge(null)
+      setQuestionDeadline(nextDeadline)
       setSecondsLeft(30)
     } else {
       setIsCompleted(true)
+      localStorage.removeItem(storageKey) // Clean up on finish
       confetti({
         particleCount: 120,
         spread: 90,
@@ -241,11 +318,13 @@ export function QuizPlayer({
   }
 
   const handleRestart = () => {
+    localStorage.removeItem(storageKey)
     setCurrentIndex(0)
     setSelectedOption(null)
     setIsAnswered(false)
     setScore(0)
     setCorrectCount(0)
+    setQuestionDeadline(Date.now() + 30 * 1000)
     setSecondsLeft(30)
     setIsCompleted(false)
     setIsDisqualified(false)
@@ -291,7 +370,10 @@ export function QuizPlayer({
 
           <div className="pt-2 flex justify-center">
             <button
-              onClick={onExit}
+              onClick={() => {
+                localStorage.removeItem(storageKey)
+                onExit()
+              }}
               className="h-12 px-6 rounded-2xl bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 font-semibold text-xs inline-flex items-center gap-2 cursor-pointer pressable"
             >
               <span>Kembali ke Beranda</span>
@@ -422,7 +504,7 @@ export function QuizPlayer({
             <button
               onClick={onExit}
               className="h-8 w-8 rounded-xl bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] border border-black/[0.06] dark:border-white/[0.08] flex items-center justify-center text-neutral-600 dark:text-neutral-300 cursor-pointer pressable"
-              title="Keluar Sesi"
+              title="Keluar Sesi (Progres Tersimpan)"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
@@ -438,8 +520,14 @@ export function QuizPlayer({
             </div>
           </div>
 
-          {/* Right Metrics: Combo Pill + Anti-Cheat Tab Status + Tier Badge + Question Countdown */}
+          {/* Right Metrics: Continuous Sync Pill + Combo + Tier Badge + Countdown */}
           <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
+            {/* Auto-Resume Status Indicator */}
+            <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/40">
+              <RefreshCw className="w-3 h-3 animate-spin" />
+              <span>Sinkron Aktif</span>
+            </span>
+
             {/* Combo Streak Indicator */}
             {combo >= 2 && (
               <span className="px-2.5 py-1 rounded-xl bg-amber-500 text-white text-xs font-bold font-mono flex items-center gap-1 shadow-xs animate-bounce">
