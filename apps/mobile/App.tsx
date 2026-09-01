@@ -6,14 +6,13 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Dimensions,
   Platform,
   Alert,
   TextInput,
-  Image,
+  Modal,
   useColorScheme,
 } from 'react-native'
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 import * as Updates from 'expo-updates'
 
@@ -34,6 +33,12 @@ interface LiveSlotData {
   seconds_remaining: number
   questions: Question[]
   participants: number
+  user_submitted?: boolean
+  user_submission?: {
+    score: number
+    correct_count: number
+    total: number
+  } | null
 }
 
 interface LeaderboardItem {
@@ -60,10 +65,11 @@ function MainScreen() {
   const insets = useSafeAreaInsets()
   const systemScheme = useColorScheme()
   const [themeMode, setThemeMode] = useState<'system' | 'light' | 'dark'>('dark')
-
   const isDark = themeMode === 'system' ? systemScheme === 'dark' : themeMode === 'dark'
 
-  const [activeTab, setActiveTab] = useState<'home' | 'quiz' | 'leaderboard' | 'profile'>('home')
+  // Navigation & View states
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [leaderboardTab, setLeaderboardTab] = useState<'weekly' | 'all'>('weekly')
   const [liveSlot, setLiveSlot] = useState<LiveSlotData | null>(null)
   const [leaderboard, setLeaderboard] = useState<LeaderboardItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -76,7 +82,7 @@ function MainScreen() {
   const [authName, setAuthName] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
 
-  // Quiz State
+  // Quiz Workspace State
   const [currentIdx, setCurrentIdx] = useState(0)
   const [selectedOpt, setSelectedOpt] = useState<number | null>(null)
   const [isAnswered, setIsAnswered] = useState(false)
@@ -85,7 +91,7 @@ function MainScreen() {
   const [questionTimer, setQuestionTimer] = useState(30)
   const [isFinished, setIsFinished] = useState(false)
 
-  // OTA Auto-Update Check on App Launch
+  // OTA Auto-Update Check
   useEffect(() => {
     async function checkOTAUpdates() {
       if (__DEV__) return
@@ -112,10 +118,10 @@ function MainScreen() {
   // Fetch Live Slot & Leaderboard
   const loadData = async () => {
     try {
-      setLoading(true)
+      const emailParam = user ? `?email=${encodeURIComponent(user.email)}` : ''
       const [slotRes, leadRes] = await Promise.all([
-        fetch(`${API_BASE}/live-slot`),
-        fetch(`${API_BASE}/leaderboard?period=weekly`),
+        fetch(`${API_BASE}/live-slot${emailParam}`),
+        fetch(`${API_BASE}/leaderboard?period=${leaderboardTab}`),
       ])
       const slotData = await slotRes.json()
       const leadData = await leadRes.json()
@@ -136,9 +142,9 @@ function MainScreen() {
 
   useEffect(() => {
     loadData()
-    const interval = setInterval(loadData, 20000)
+    const interval = setInterval(loadData, 15000)
     return () => clearInterval(interval)
-  }, [])
+  }, [user?.email, leaderboardTab])
 
   // Slot countdown timer
   useEffect(() => {
@@ -151,7 +157,7 @@ function MainScreen() {
 
   // Question countdown timer in quiz mode
   useEffect(() => {
-    if (activeTab !== 'quiz' || isAnswered || isFinished) return
+    if (!isPlaying || isAnswered || isFinished) return
     if (questionTimer <= 0) {
       handleSelectOption(-1)
       return
@@ -160,7 +166,7 @@ function MainScreen() {
       setQuestionTimer((prev) => prev - 1)
     }, 1000)
     return () => clearInterval(t)
-  }, [activeTab, questionTimer, isAnswered, isFinished])
+  }, [isPlaying, questionTimer, isAnswered, isFinished])
 
   const formatCountdown = (secs: number) => {
     const m = Math.floor(secs / 60)
@@ -187,12 +193,13 @@ function MainScreen() {
         }),
       })
       const data = await res.json()
-      if (data.success && data.user) {
-        setUser(data.user)
+      if (data.success && (data.user || data.data)) {
+        const loggedUser = data.user || data.data
+        setUser(loggedUser)
         setIsAuthModalOpen(false)
         setAuthEmail('')
         setAuthName('')
-        Alert.alert('Berhasil Masuk', `Selamat datang, ${data.user.name}!`)
+        Alert.alert('Berhasil Masuk', `Selamat datang, ${loggedUser.name}!`)
         loadData()
       } else {
         Alert.alert('Gagal Masuk', data.error || 'Terjadi kesalahan autentikasi.')
@@ -204,7 +211,8 @@ function MainScreen() {
     }
   }
 
-  const startQuiz = () => {
+  // Handle Start Live Quiz - Strict Auth Check
+  const handleStartLiveQuiz = () => {
     if (!user) {
       setIsAuthModalOpen(true)
       return
@@ -220,7 +228,7 @@ function MainScreen() {
     setCorrectCount(0)
     setQuestionTimer(30)
     setIsFinished(false)
-    setActiveTab('quiz')
+    setIsPlaying(true)
   }
 
   const handleSelectOption = (index: number) => {
@@ -286,37 +294,39 @@ function MainScreen() {
 
   // Dynamic Theme Colors
   const colors = {
-    bg: isDark ? '#090a0f' : '#f5f5f7',
-    card: isDark ? '#111218' : '#ffffff',
+    bg: isDark ? '#000000' : '#f5f5f7',
+    card: isDark ? '#111114' : '#ffffff',
     cardBorder: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-    cardSubtle: isDark ? '#171821' : '#f0f0f3',
-    text: isDark ? '#f9fafb' : '#111827',
+    cardSubtle: isDark ? '#18181c' : '#f4f4f6',
+    text: isDark ? '#f9fafb' : '#0a0a0c',
     textMuted: isDark ? '#9ca3af' : '#6b7280',
     primary: '#4f46e5',
     emerald: '#10b981',
     rose: '#ef4444',
     amber: '#f59e0b',
-    navBg: isDark ? 'rgba(17,18,24,0.94)' : 'rgba(255,255,255,0.94)',
-    navBorder: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
   }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
 
-      {/* Top Header with Safe Area Inset */}
+      {/* Top Header */}
       <View
         style={[
           styles.header,
           {
-            paddingTop: Math.max(insets.top, 16),
+            paddingTop: Math.max(insets.top, 14),
             backgroundColor: colors.card,
             borderBottomColor: colors.cardBorder,
           },
         ]}
       >
         <View style={styles.headerRow}>
-          <View style={styles.brandRow}>
+          <TouchableOpacity
+            style={styles.brandRow}
+            onPress={() => setIsPlaying(false)}
+            activeOpacity={0.8}
+          >
             <View style={styles.brandBadge}>
               <Text style={styles.brandBadgeText}>QP</Text>
             </View>
@@ -326,7 +336,7 @@ function MainScreen() {
                 Uji Wawasan Terpadu
               </Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
           {/* Right Action: Theme Switcher & User Profile */}
           <View style={styles.headerActions}>
@@ -340,8 +350,18 @@ function MainScreen() {
 
             {user ? (
               <TouchableOpacity
-                onPress={() => setActiveTab('profile')}
+                onPress={() => {
+                  Alert.alert(
+                    'Akun Anda',
+                    `${user.name} (${user.email})\nTotal Poin: ${user.points} Pts\nStreak: 🔥 ${user.streak} Hari`,
+                    [
+                      { text: 'Tutup', style: 'cancel' },
+                      { text: 'Keluar Akun', style: 'destructive', onPress: () => setUser(null) },
+                    ]
+                  )
+                }}
                 style={[styles.userPill, { backgroundColor: colors.cardSubtle, borderColor: colors.cardBorder }]}
+                activeOpacity={0.8}
               >
                 <Text style={[styles.userPillText, { color: colors.text }]} numberOfLines={1}>
                   {user.name}
@@ -360,374 +380,307 @@ function MainScreen() {
         </View>
       </View>
 
-      {/* Main Body Content */}
+      {/* Main Content Area */}
       <View style={styles.contentContainer}>
         {loading && !liveSlot ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={[styles.loadingText, { color: colors.textMuted }]}>
-              Menghubungkan ke Server...
+              Menghubungkan ke Sesi Live...
             </Text>
           </View>
-        ) : (
-          <>
-            {/* HOME VIEW */}
-            {activeTab === 'home' && (
-              <ScrollView
-                style={styles.scrollArea}
-                contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 80 }]}
-                showsVerticalScrollIndicator={false}
-              >
-                {/* Live Synchronized Card */}
-                <View style={[styles.heroCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                  <View style={styles.badgeRow}>
-                    <View style={styles.liveIndicator}>
-                      <View style={styles.liveDot} />
-                      <Text style={styles.liveText}>SESI LIVE 30 MENIT</Text>
-                    </View>
-                    <View style={[styles.timerBadge, { backgroundColor: colors.cardSubtle }]}>
-                      <Text style={[styles.timerText, { color: colors.primary }]}>
-                        ⏳ {formatCountdown(secondsLeft)}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <Text style={[styles.heroTitle, { color: colors.text }]}>Kuis Wawasan Terpadu</Text>
-                  <Text style={[styles.heroDesc, { color: colors.textMuted }]}>
-                    Soal teracak deterministik lintas mata pelajaran SD, SMP, dan SMA secara seimbang di seluruh Indonesia.
-                  </Text>
-
-                  {/* Level Info Breakdown */}
-                  <View style={styles.infoRow}>
-                    <View style={[styles.infoBox, { backgroundColor: colors.cardSubtle }]}>
-                      <Text style={[styles.infoVal, { color: colors.text }]}>+10 Pts</Text>
-                      <Text style={[styles.infoLbl, { color: colors.textMuted }]}>Dasar</Text>
-                    </View>
-                    <View style={[styles.infoBox, { backgroundColor: colors.cardSubtle }]}>
-                      <Text style={[styles.infoVal, { color: colors.text }]}>+20 Pts</Text>
-                      <Text style={[styles.infoLbl, { color: colors.textMuted }]}>Menengah</Text>
-                    </View>
-                    <View style={[styles.infoBox, { backgroundColor: colors.cardSubtle }]}>
-                      <Text style={[styles.infoVal, { color: colors.text }]}>+30 Pts</Text>
-                      <Text style={[styles.infoLbl, { color: colors.textMuted }]}>Lanjutan</Text>
-                    </View>
-                  </View>
-
+        ) : isPlaying ? (
+          /* QUIZ WORKSPACE VIEW */
+          <ScrollView
+            style={styles.scrollArea}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+            showsVerticalScrollIndicator={false}
+          >
+            {!isFinished && currentQ ? (
+              <View style={[styles.quizCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                {/* Progress Bar & Header */}
+                <View style={styles.quizHeader}>
                   <TouchableOpacity
-                    style={styles.startBtn}
-                    onPress={startQuiz}
-                    activeOpacity={0.8}
+                    onPress={() => setIsPlaying(false)}
+                    style={[styles.exitBtn, { backgroundColor: colors.cardSubtle, borderColor: colors.cardBorder }]}
                   >
-                    <Text style={styles.startBtnText}>
-                      {user ? 'Ikuti Ujian Sesi Sekarang ⚡' : 'Masuk untuk Mulai Kuis 🚀'}
-                    </Text>
+                    <Text style={[styles.exitBtnText, { color: colors.text }]}>✕ Keluar</Text>
                   </TouchableOpacity>
-                </View>
-
-                {/* Retensi / Tips Card */}
-                <View style={[styles.tipCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.tipTitle, { color: colors.text }]}>🛡️ Sistem Anti-Cheat & Fair Play</Text>
-                  <Text style={[styles.tipText, { color: colors.textMuted }]}>
-                    Tiap butir soal memiliki timer 30 detik. Poin mingguan akan di-reset setiap hari Senin pukul 00:00 WIB untuk menjaga kompetisi tetap segar.
+                  <Text style={[styles.qCounter, { color: colors.textMuted }]}>
+                    Soal {currentIdx + 1} / {questions.length}
                   </Text>
-                </View>
-              </ScrollView>
-            )}
-
-            {/* QUIZ WORKSPACE VIEW */}
-            {activeTab === 'quiz' && (
-              <ScrollView
-                style={styles.scrollArea}
-                contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 80 }]}
-                showsVerticalScrollIndicator={false}
-              >
-                {!isFinished && currentQ ? (
-                  <View style={[styles.quizCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                    {/* Progress Bar & Header */}
-                    <View style={styles.quizHeader}>
-                      <Text style={[styles.qCounter, { color: colors.textMuted }]}>
-                        Soal {currentIdx + 1} dari {questions.length}
-                      </Text>
-                      <View style={[styles.qTimerBox, { backgroundColor: questionTimer <= 5 ? colors.rose : colors.primary }]}>
-                        <Text style={styles.qTimerText}>{questionTimer}s</Text>
-                      </View>
-                    </View>
-
-                    {/* Question Text */}
-                    <Text style={[styles.qText, { color: colors.text }]}>{currentQ.question}</Text>
-
-                    {/* Options List */}
-                    <View style={styles.optionsContainer}>
-                      {(currentQ.options || []).map((opt, idx) => {
-                        let btnBg = colors.cardSubtle
-                        let borderCol = colors.cardBorder
-                        let textColor = colors.text
-
-                        if (isAnswered) {
-                          if (idx === currentQ.answer_index) {
-                            btnBg = 'rgba(16,185,129,0.15)'
-                            borderCol = colors.emerald
-                            textColor = colors.emerald
-                          } else if (idx === selectedOpt) {
-                            btnBg = 'rgba(239,68,68,0.15)'
-                            borderCol = colors.rose
-                            textColor = colors.rose
-                          }
-                        }
-
-                        return (
-                          <TouchableOpacity
-                            key={idx}
-                            style={[styles.optBtn, { backgroundColor: btnBg, borderColor: borderCol }]}
-                            onPress={() => handleSelectOption(idx)}
-                            disabled={isAnswered}
-                            activeOpacity={0.7}
-                          >
-                            <View style={[styles.optIndex, { backgroundColor: colors.card, borderColor: borderCol }]}>
-                              <Text style={[styles.optIndexText, { color: textColor }]}>
-                                {String.fromCharCode(65 + idx)}
-                              </Text>
-                            </View>
-                            <Text style={[styles.optText, { color: textColor }]}>{opt}</Text>
-                          </TouchableOpacity>
-                        )
-                      })}
-                    </View>
-
-                    {/* Explanation if Answered */}
-                    {isAnswered && (
-                      <View style={[styles.expBox, { backgroundColor: colors.cardSubtle, borderColor: colors.cardBorder }]}>
-                        <Text style={[styles.expTitle, { color: colors.text }]}>💡 Pembahasan:</Text>
-                        <Text style={[styles.expText, { color: colors.textMuted }]}>{currentQ.explanation}</Text>
-
-                        <TouchableOpacity
-                          style={styles.nextBtn}
-                          onPress={handleNextQuestion}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={styles.nextBtnText}>
-                            {currentIdx + 1 < questions.length ? 'Soal Berikutnya ➔' : 'Selesai & Lihat Skor 🎉'}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
+                  <View style={[styles.qTimerBox, { backgroundColor: questionTimer <= 5 ? colors.rose : colors.primary }]}>
+                    <Text style={styles.qTimerText}>{questionTimer}s</Text>
                   </View>
-                ) : (
-                  /* Result Screen */
-                  <View style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                    <Text style={styles.resultEmoji}>🏆</Text>
-                    <Text style={[styles.resultTitle, { color: colors.text }]}>Kuis Selesai!</Text>
-                    <Text style={[styles.resultSubtitle, { color: colors.textMuted }]}>
-                      Hebat! Kamu telah menyelesaikan sesi kuis terpadu.
-                    </Text>
+                </View>
 
-                    <View style={styles.scoreGrid}>
-                      <View style={[styles.scoreItem, { backgroundColor: colors.cardSubtle }]}>
-                        <Text style={[styles.scoreVal, { color: colors.primary }]}>{score}</Text>
-                        <Text style={[styles.scoreLbl, { color: colors.textMuted }]}>Poin Diperoleh</Text>
-                      </View>
-                      <View style={[styles.scoreItem, { backgroundColor: colors.cardSubtle }]}>
-                        <Text style={[styles.scoreVal, { color: colors.emerald }]}>
-                          {correctCount}/{questions.length}
-                        </Text>
-                        <Text style={[styles.scoreLbl, { color: colors.textMuted }]}>Jawaban Benar</Text>
-                      </View>
-                    </View>
+                {/* Question Text */}
+                <Text style={[styles.qText, { color: colors.text }]}>{currentQ.question}</Text>
+
+                {/* Options List */}
+                <View style={styles.optionsContainer}>
+                  {(currentQ.options || []).map((opt, idx) => {
+                    let btnBg = colors.cardSubtle
+                    let borderCol = colors.cardBorder
+                    let textColor = colors.text
+
+                    if (isAnswered) {
+                      if (idx === currentQ.answer_index) {
+                        btnBg = 'rgba(16,185,129,0.15)'
+                        borderCol = colors.emerald
+                        textColor = colors.emerald
+                      } else if (idx === selectedOpt) {
+                        btnBg = 'rgba(239,68,68,0.15)'
+                        borderCol = colors.rose
+                        textColor = colors.rose
+                      }
+                    }
+
+                    return (
+                      <TouchableOpacity
+                        key={idx}
+                        style={[styles.optBtn, { backgroundColor: btnBg, borderColor: borderCol }]}
+                        onPress={() => handleSelectOption(idx)}
+                        disabled={isAnswered}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[styles.optIndex, { backgroundColor: colors.card, borderColor: borderCol }]}>
+                          <Text style={[styles.optIndexText, { color: textColor }]}>
+                            {String.fromCharCode(65 + idx)}
+                          </Text>
+                        </View>
+                        <Text style={[styles.optText, { color: textColor }]}>{opt}</Text>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </View>
+
+                {/* Explanation if Answered */}
+                {isAnswered && (
+                  <View style={[styles.expBox, { backgroundColor: colors.cardSubtle, borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.expTitle, { color: colors.text }]}>💡 Pembahasan:</Text>
+                    <Text style={[styles.expText, { color: colors.textMuted }]}>{currentQ.explanation}</Text>
 
                     <TouchableOpacity
-                      style={styles.backHomeBtn}
-                      onPress={() => setActiveTab('home')}
+                      style={styles.nextBtn}
+                      onPress={handleNextQuestion}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.backHomeText}>Kembali ke Beranda</Text>
+                      <Text style={styles.nextBtnText}>
+                        {currentIdx + 1 < questions.length ? 'Soal Berikutnya ➔' : 'Selesai & Lihat Skor 🎉'}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 )}
-              </ScrollView>
-            )}
+              </View>
+            ) : (
+              /* Result Screen */
+              <View style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                <Text style={styles.resultEmoji}>🏆</Text>
+                <Text style={[styles.resultTitle, { color: colors.text }]}>Kuis Selesai!</Text>
+                <Text style={[styles.resultSubtitle, { color: colors.textMuted }]}>
+                  Hebat! Kamu telah menyelesaikan sesi kuis wawasan terpadu.
+                </Text>
 
-            {/* LEADERBOARD VIEW */}
-            {activeTab === 'leaderboard' && (
-              <ScrollView
-                style={styles.scrollArea}
-                contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 80 }]}
-                showsVerticalScrollIndicator={false}
-              >
-                <View style={[styles.leadHeaderCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.leadTitle, { color: colors.text }]}>👑 Klasemen Musim Ini</Text>
-                  <Text style={[styles.leadSubtitle, { color: colors.textMuted }]}>
-                    Poin di-reset otomatis setiap hari Senin pukul 00:00 WIB.
+                <View style={styles.scoreGrid}>
+                  <View style={[styles.scoreItem, { backgroundColor: colors.cardSubtle }]}>
+                    <Text style={[styles.scoreVal, { color: colors.primary }]}>{score}</Text>
+                    <Text style={[styles.scoreLbl, { color: colors.textMuted }]}>Poin Diperoleh</Text>
+                  </View>
+                  <View style={[styles.scoreItem, { backgroundColor: colors.cardSubtle }]}>
+                    <Text style={[styles.scoreVal, { color: colors.emerald }]}>
+                      {correctCount}/{questions.length}
+                    </Text>
+                    <Text style={[styles.scoreLbl, { color: colors.textMuted }]}>Jawaban Benar</Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.backHomeBtn}
+                  onPress={() => setIsPlaying(false)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.backHomeText}>Kembali ke Beranda</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </ScrollView>
+        ) : (
+          /* HOME LANDING VIEW (Mirip persis seperti web) */
+          <ScrollView
+            style={styles.scrollArea}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Live 30-Minute Synchronized Hero Card */}
+            <View style={[styles.heroCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              {/* Top Banner Status Bar */}
+              <View style={styles.badgeRow}>
+                <View style={styles.liveIndicator}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveText}>SESI LIVE SINKRON 30 MENIT</Text>
+                </View>
+                <View style={[styles.slotPill, { backgroundColor: colors.cardSubtle }]}>
+                  <Text style={[styles.slotPillText, { color: colors.textMuted }]}>
+                    Slot #{liveSlot?.slot_id || '---'}
                   </Text>
                 </View>
+              </View>
 
-                {leaderboard.map((item, index) => {
-                  return (
-                    <View
-                      key={item.id}
-                      style={[styles.rankItem, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-                    >
-                      <View style={styles.rankLeft}>
-                        <View
-                          style={[
-                            styles.rankBadge,
-                            index === 0 && { backgroundColor: '#fef08a' },
-                            index === 1 && { backgroundColor: '#e2e8f0' },
-                            index === 2 && { backgroundColor: '#fed7aa' },
-                          ]}
-                        >
-                          <Text style={styles.rankBadgeText}>#{index + 1}</Text>
-                        </View>
-                        <View>
-                          <Text style={[styles.rankName, { color: colors.text }]} numberOfLines={1}>
-                            {item.name}
-                          </Text>
-                          <Text style={[styles.rankMeta, { color: colors.textMuted }]}>
-                            {item.quizzes_completed || 0} Sesi Kuis • 🔥 {item.streak || 1} Hari
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.rankRight}>
-                        <Text style={[styles.rankPoints, { color: colors.primary }]}>
-                          {item.weekly_points || item.points || 0}
-                        </Text>
-                        <Text style={[styles.rankPtsLbl, { color: colors.textMuted }]}>Pts</Text>
-                      </View>
-                    </View>
-                  )
-                })}
-              </ScrollView>
-            )}
+              {/* Tag & Title */}
+              <View style={styles.titleBlock}>
+                <View style={styles.kategoriBadge}>
+                  <Text style={styles.kategoriBadgeText}>✨ Kuis Wawasan Terpadu</Text>
+                </View>
+                <Text style={[styles.heroTitle, { color: colors.text }]}>
+                  Uji Nalar & Wawasan Kehidupan Nyata
+                </Text>
+                <Text style={[styles.heroDesc, { color: colors.textMuted }]}>
+                  Komposisi butir soal komprehensif sains, logika kuantitatif, literasi bahasa, sejarah, dan finansial.
+                </Text>
+              </View>
 
-            {/* PROFILE VIEW */}
-            {activeTab === 'profile' && (
-              <ScrollView
-                style={styles.scrollArea}
-                contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 80 }]}
-                showsVerticalScrollIndicator={false}
-              >
-                <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                  <View style={styles.avatarBig}>
-                    <Text style={styles.avatarBigText}>
-                      {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
-                    </Text>
-                  </View>
-                  <Text style={[styles.profileName, { color: colors.text }]}>{user?.name || 'Pengguna'}</Text>
-                  <Text style={[styles.profileEmail, { color: colors.textMuted }]}>{user?.email || '-'}</Text>
+              {/* 3 Metric Insets */}
+              <View style={styles.metricsGrid}>
+                <View style={[styles.metricBox, { backgroundColor: colors.cardSubtle }]}>
+                  <Text style={[styles.metricLbl, { color: colors.textMuted }]}>SISA WAKTU SESI</Text>
+                  <Text style={[styles.metricValTime, { color: colors.primary }]}>
+                    ⏳ {formatCountdown(secondsLeft)}
+                  </Text>
+                </View>
+                <View style={[styles.metricBox, { backgroundColor: colors.cardSubtle }]}>
+                  <Text style={[styles.metricLbl, { color: colors.textMuted }]}>JUMLAH SOAL</Text>
+                  <Text style={[styles.metricVal, { color: colors.text }]}>
+                    📖 {liveSlot?.questions?.length || 15} Butir
+                  </Text>
+                </View>
+                <View style={[styles.metricBox, { backgroundColor: colors.cardSubtle }]}>
+                  <Text style={[styles.metricLbl, { color: colors.textMuted }]}>PARTISIPAN</Text>
+                  <Text style={[styles.metricVal, { color: colors.text }]}>
+                    👥 {liveSlot?.participants || 0} Pemain
+                  </Text>
+                </View>
+              </View>
 
-                  <View style={styles.profileStatsRow}>
-                    <View style={[styles.pStatBox, { backgroundColor: colors.cardSubtle }]}>
-                      <Text style={[styles.pStatVal, { color: colors.primary }]}>{user?.points || 0}</Text>
-                      <Text style={[styles.pStatLbl, { color: colors.textMuted }]}>Total Poin</Text>
-                    </View>
-                    <View style={[styles.pStatBox, { backgroundColor: colors.cardSubtle }]}>
-                      <Text style={[styles.pStatVal, { color: colors.amber }]}>🔥 {user?.streak || 1}</Text>
-                      <Text style={[styles.pStatLbl, { color: colors.textMuted }]}>Daily Streak</Text>
-                    </View>
-                  </View>
+              {/* CTA Action Button */}
+              {liveSlot?.user_submitted ? (
+                <View style={styles.submittedBox}>
+                  <Text style={styles.submittedTitle}>✅ Sesi Ini Telah Anda Selesaikan</Text>
+                  <Text style={styles.submittedDesc}>
+                    Skor: {liveSlot.user_submission?.score || 0} Pts ({liveSlot.user_submission?.correct_count || 0} Benar)
+                  </Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.startBtn}
+                  onPress={handleStartLiveQuiz}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.startBtnText}>
+                    {user ? 'Ikuti Ujian Sesi Sekarang ⚡' : 'Masuk untuk Mulai Kuis 🚀'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
+            {/* 3 Points Level Cards */}
+            <View style={styles.levelsGrid}>
+              <View style={[styles.levelCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                <Text style={styles.levelEmoji}>🌱</Text>
+                <Text style={[styles.levelTitle, { color: colors.text }]}>Wawasan Dasar</Text>
+                <Text style={[styles.levelPts, { color: colors.emerald }]}>+10 Pts</Text>
+              </View>
+              <View style={[styles.levelCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                <Text style={styles.levelEmoji}>🧭</Text>
+                <Text style={[styles.levelTitle, { color: colors.text }]}>Wawasan Menengah</Text>
+                <Text style={[styles.levelPts, { color: colors.primary }]}>+20 Pts</Text>
+              </View>
+              <View style={[styles.levelCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                <Text style={styles.levelEmoji}>🎓</Text>
+                <Text style={[styles.levelTitle, { color: colors.text }]}>Wawasan Lanjutan</Text>
+                <Text style={[styles.levelPts, { color: colors.amber }]}>+30 Pts</Text>
+              </View>
+            </View>
+
+            {/* Leaderboard Section with Tab Switcher */}
+            <View style={[styles.leadSection, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              <View style={styles.leadHeaderRow}>
+                <Text style={[styles.leadSectionTitle, { color: colors.text }]}>🏆 Papan Peringkat</Text>
+                <View style={[styles.tabSwitch, { backgroundColor: colors.cardSubtle }]}>
                   <TouchableOpacity
-                    style={styles.logoutBtn}
-                    onPress={() => {
-                      setUser(null)
-                      setActiveTab('home')
-                    }}
-                    activeOpacity={0.8}
+                    style={[styles.tabBtn, leaderboardTab === 'weekly' && styles.tabBtnActive]}
+                    onPress={() => setLeaderboardTab('weekly')}
                   >
-                    <Text style={styles.logoutBtnText}>Keluar Akun</Text>
+                    <Text style={[styles.tabBtnText, leaderboardTab === 'weekly' && styles.tabBtnTextActive]}>
+                      Minggu Ini
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.tabBtn, leaderboardTab === 'all' && styles.tabBtnActive]}
+                    onPress={() => setLeaderboardTab('all')}
+                  >
+                    <Text style={[styles.tabBtnText, leaderboardTab === 'all' && styles.tabBtnTextActive]}>
+                      All-Time
+                    </Text>
                   </TouchableOpacity>
                 </View>
-              </ScrollView>
-            )}
-          </>
+              </View>
+
+              <View style={styles.rankList}>
+                {leaderboard.map((item, index) => (
+                  <View
+                    key={item.id}
+                    style={[styles.rankRow, { borderBottomColor: colors.cardBorder }]}
+                  >
+                    <View style={styles.rankLeft}>
+                      <View
+                        style={[
+                          styles.rankBadge,
+                          index === 0 && { backgroundColor: '#fef08a' },
+                          index === 1 && { backgroundColor: '#e2e8f0' },
+                          index === 2 && { backgroundColor: '#fed7aa' },
+                        ]}
+                      >
+                        <Text style={styles.rankBadgeText}>#{index + 1}</Text>
+                      </View>
+                      <View>
+                        <Text style={[styles.rankName, { color: colors.text }]} numberOfLines={1}>
+                          {item.name}
+                        </Text>
+                        <Text style={[styles.rankMeta, { color: colors.textMuted }]}>
+                          {item.quizzes_completed || 0} Sesi • 🔥 {item.streak || 1} Hari
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.rankRight}>
+                      <Text style={[styles.rankPoints, { color: colors.primary }]}>
+                        {leaderboardTab === 'weekly' ? item.weekly_points : item.points}
+                      </Text>
+                      <Text style={[styles.rankPtsLbl, { color: colors.textMuted }]}>Pts</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </ScrollView>
         )}
       </View>
 
-      {/* Bottom Navigation Bar with Safe Area Insets */}
-      <View
-        style={[
-          styles.bottomNav,
-          {
-            paddingBottom: Math.max(insets.bottom, 12),
-            backgroundColor: colors.navBg,
-            borderTopColor: colors.navBorder,
-          },
-        ]}
+      {/* Clean Auth Modal */}
+      <Modal
+        visible={isAuthModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsAuthModalOpen(false)}
       >
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => setActiveTab('home')}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.navIcon, activeTab === 'home' && { color: colors.primary }]}>🏠</Text>
-          <Text
-            style={[
-              styles.navLabel,
-              { color: activeTab === 'home' ? colors.primary : colors.textMuted },
-            ]}
-          >
-            Beranda
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={startQuiz}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.navIcon, activeTab === 'quiz' && { color: colors.primary }]}>⚡</Text>
-          <Text
-            style={[
-              styles.navLabel,
-              { color: activeTab === 'quiz' ? colors.primary : colors.textMuted },
-            ]}
-          >
-            Kuis Live
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => setActiveTab('leaderboard')}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.navIcon, activeTab === 'leaderboard' && { color: colors.primary }]}>👑</Text>
-          <Text
-            style={[
-              styles.navLabel,
-              { color: activeTab === 'leaderboard' ? colors.primary : colors.textMuted },
-            ]}
-          >
-            Klasemen
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => {
-            if (!user) setIsAuthModalOpen(true)
-            else setActiveTab('profile')
-          }}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.navIcon, activeTab === 'profile' && { color: colors.primary }]}>👤</Text>
-          <Text
-            style={[
-              styles.navLabel,
-              { color: activeTab === 'profile' ? colors.primary : colors.textMuted },
-            ]}
-          >
-            {user ? 'Profil' : 'Masuk'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Simple Clean Auth Modal */}
-      {isAuthModalOpen && (
         <View style={styles.modalOverlay}>
           <View style={[styles.authCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            <View style={styles.authEmblem}>
+              <Text style={{ fontSize: 24 }}>✨</Text>
+            </View>
             <Text style={[styles.authTitle, { color: colors.text }]}>Masuk ke Quiz Pocket</Text>
             <Text style={[styles.authSubtitle, { color: colors.textMuted }]}>
-              Gunakan email Gmail Anda untuk mencatat poin ranking dan streak belajar.
+              Wajib masuk menggunakan akun Gmail untuk mencatat skor ujian, poin ranking, dan streak belajar kuis.
             </Text>
 
             <View style={styles.authForm}>
@@ -779,7 +732,7 @@ function MainScreen() {
             </View>
           </View>
         </View>
-      )}
+      </Modal>
     </View>
   )
 }
@@ -849,7 +802,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    maxWidth: 90,
+    maxWidth: 100,
   },
   userPillText: {
     fontSize: 11,
@@ -883,13 +836,13 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    gap: 16,
+    gap: 14,
   },
   heroCard: {
     padding: 20,
     borderRadius: 24,
     borderWidth: StyleSheet.hairlineWidth,
-    gap: 12,
+    gap: 14,
   },
   badgeRow: {
     flexDirection: 'row',
@@ -913,68 +866,198 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
-  timerBadge: {
+  slotPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  slotPillText: {
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontWeight: '700',
+  },
+  titleBlock: {
+    gap: 6,
+  },
+  kategoriBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(79,70,229,0.1)',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 10,
+    borderRadius: 8,
   },
-  timerText: {
+  kategoriBadgeText: {
+    color: '#4f46e5',
     fontSize: 11,
     fontWeight: '700',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   heroTitle: {
     fontSize: 20,
     fontWeight: '800',
+    lineHeight: 26,
   },
   heroDesc: {
     fontSize: 12,
     lineHeight: 18,
   },
-  infoRow: {
+  metricsGrid: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 4,
   },
-  infoBox: {
+  metricBox: {
     flex: 1,
     padding: 10,
     borderRadius: 14,
-    alignItems: 'center',
-    gap: 2,
+    gap: 3,
   },
-  infoVal: {
+  metricLbl: {
+    fontSize: 9,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontWeight: '700',
+  },
+  metricVal: {
     fontSize: 12,
     fontWeight: '700',
   },
-  infoLbl: {
-    fontSize: 10,
+  metricValTime: {
+    fontSize: 12,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   startBtn: {
     backgroundColor: '#4f46e5',
     paddingVertical: 14,
     borderRadius: 16,
     alignItems: 'center',
-    marginTop: 6,
+    marginTop: 4,
   },
   startBtnText: {
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '700',
   },
-  tipCard: {
-    padding: 16,
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    gap: 6,
+  submittedBox: {
+    backgroundColor: 'rgba(16,185,129,0.1)',
+    padding: 12,
+    borderRadius: 14,
+    gap: 2,
+    alignItems: 'center',
   },
-  tipTitle: {
-    fontSize: 13,
+  submittedTitle: {
+    color: '#10b981',
+    fontSize: 12,
     fontWeight: '700',
   },
-  tipText: {
+  submittedDesc: {
+    color: '#10b981',
     fontSize: 11,
-    lineHeight: 16,
+  },
+  levelsGrid: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  levelCard: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    gap: 3,
+  },
+  levelEmoji: {
+    fontSize: 20,
+  },
+  levelTitle: {
+    fontSize: 10,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  levelPts: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  leadSection: {
+    padding: 16,
+    borderRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 12,
+  },
+  leadHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  leadSectionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  tabSwitch: {
+    flexDirection: 'row',
+    padding: 3,
+    borderRadius: 12,
+  },
+  tabBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 9,
+  },
+  tabBtnActive: {
+    backgroundColor: '#4f46e5',
+  },
+  tabBtnText: {
+    fontSize: 10,
+    color: '#9ca3af',
+    fontWeight: '600',
+  },
+  tabBtnTextActive: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  rankList: {
+    gap: 2,
+  },
+  rankRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  rankLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  rankBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  rankName: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  rankMeta: {
+    fontSize: 10,
+  },
+  rankRight: {
+    alignItems: 'flex-end',
+  },
+  rankPoints: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  rankPtsLbl: {
+    fontSize: 8,
   },
   quizCard: {
     padding: 18,
@@ -986,6 +1069,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  exitBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  exitBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   qCounter: {
     fontSize: 12,
@@ -1112,152 +1205,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  leadHeaderCard: {
-    padding: 16,
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    gap: 4,
-  },
-  leadTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  leadSubtitle: {
-    fontSize: 11,
-  },
-  rankItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 14,
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  rankLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  rankBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rankBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  rankName: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  rankMeta: {
-    fontSize: 10,
-  },
-  rankRight: {
-    alignItems: 'flex-end',
-  },
-  rankPoints: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  rankPtsLbl: {
-    fontSize: 9,
-  },
-  profileCard: {
-    padding: 24,
-    borderRadius: 24,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    gap: 10,
-  },
-  avatarBig: {
-    width: 64,
-    height: 64,
-    borderRadius: 22,
-    backgroundColor: '#4f46e5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarBigText: {
-    color: '#ffffff',
-    fontSize: 24,
-    fontWeight: '800',
-  },
-  profileName: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  profileEmail: {
-    fontSize: 12,
-  },
-  profileStatsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    width: '100%',
-    marginVertical: 10,
-  },
-  pStatBox: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 16,
-    alignItems: 'center',
-    gap: 4,
-  },
-  pStatVal: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  pStatLbl: {
-    fontSize: 10,
-  },
-  logoutBtn: {
-    backgroundColor: 'rgba(239,68,68,0.1)',
-    width: '100%',
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  logoutBtnText: {
-    color: '#ef4444',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  bottomNav: {
-    flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 8,
-    paddingHorizontal: 8,
-  },
-  navItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-  },
-  navIcon: {
-    fontSize: 18,
-  },
-  navLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
   modalOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
-    zIndex: 100,
   },
   authCard: {
     width: '100%',
@@ -1266,6 +1219,15 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: StyleSheet.hairlineWidth,
     gap: 12,
+  },
+  authEmblem: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: 'rgba(79,70,229,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
   },
   authTitle: {
     fontSize: 18,
