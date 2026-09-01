@@ -290,7 +290,7 @@ export function App() {
               <div className="space-y-2">
                 <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-medium border border-indigo-200/30">
                   <Sparkles className="w-3.5 h-3.5" />
-                  Kuis Terpadu (40% SD · 40% SMP · 20% SMA)
+                  Kuis Wawasan Terpadu
                 </div>
                 <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-950 dark:text-white">
                   Uji Nalar & Wawasan Kehidupan Nyata
@@ -379,13 +379,13 @@ export function App() {
                       <BookOpen className="w-4 h-4" />
                     </div>
                     <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/40">
-                      40% Soal · +10 Pts
+                      Tingkat Dasar · +10 Pts
                     </span>
                   </div>
                   <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-neutral-950 dark:text-white">Tingkat SD (Dasar)</h4>
+                    <h4 className="text-xs sm:text-sm font-bold text-neutral-950 dark:text-white">Wawasan Dasar</h4>
                     <p className="text-[11px] text-neutral-500 mt-0.5 leading-relaxed">
-                      Sains dasar, indra tubuh, flora & fauna nusantara, dan logika hitung.
+                      Sains alamiah, indra tubuh, flora & fauna, dan logika hitung.
                     </p>
                   </div>
                 </div>
@@ -397,13 +397,13 @@ export function App() {
                       <Compass className="w-4 h-4" />
                     </div>
                     <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/40">
-                      40% Soal · +20 Pts
+                      Tingkat Menengah · +20 Pts
                     </span>
                   </div>
                   <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-neutral-950 dark:text-white">Tingkat SMP (Menengah)</h4>
+                    <h4 className="text-xs sm:text-sm font-bold text-neutral-950 dark:text-white">Wawasan Menengah</h4>
                     <p className="text-[11px] text-neutral-500 mt-0.5 leading-relaxed">
-                      Geografi nusantara, sejarah nasional, dan fenomena fisika bumi.
+                      Geografi nusantara, sejarah peradaban, dan fenomena alam.
                     </p>
                   </div>
                 </div>
@@ -415,11 +415,11 @@ export function App() {
                       <GraduationCap className="w-4 h-4" />
                     </div>
                     <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/40">
-                      20% Soal · +30 Pts
+                      Tingkat Lanjutan · +30 Pts
                     </span>
                   </div>
                   <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-neutral-950 dark:text-white">Tingkat SMA (Lanjutan)</h4>
+                    <h4 className="text-xs sm:text-sm font-bold text-neutral-950 dark:text-white">Wawasan Lanjutan</h4>
                     <p className="text-[11px] text-neutral-500 mt-0.5 leading-relaxed">
                       Logika kritis, finansial/ekonomi, sains terapan, dan penalaran ilmiah.
                     </p>
