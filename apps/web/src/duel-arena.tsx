@@ -378,65 +378,30 @@ export function DuelArena({
               })}
             </div>
 
-            {/* Unified Apple-Design Explanation & Next */}
+            {/* Clean Apple-Design Explanation & Next */}
             {isAnswered && (
-              <div className="rounded-3xl border border-black/[0.08] dark:border-white/[0.08] bg-white/90 dark:bg-[#121318]/90 backdrop-blur-2xl p-5 space-y-4 shadow-xs">
+              <div className="rounded-3xl border border-black/[0.08] dark:border-white/[0.08] bg-white/90 dark:bg-[#121318]/90 backdrop-blur-2xl p-5 space-y-3.5 shadow-xs">
                 {/* Status Indicator */}
                 <div className="flex items-center gap-2 pb-2.5 border-b border-black/[0.06] dark:border-white/[0.06]">
                   {selectedOption === currentQ.answer_index ? (
                     <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                      ✓ Jawaban Tepat (+{currentQ.points || 10} Pts)
+                      ✓ Jawaban Benar (+{currentQ.points || 10} Pts)
                     </span>
                   ) : (
                     <span className="text-xs font-bold text-rose-600 dark:text-rose-400">
-                      ✗ Evaluasi & Analisis Jawaban
+                      ✗ Jawaban Kurang Tepat — Kunci: {String.fromCharCode(65 + currentQ.answer_index)}. {currentQ.options[currentQ.answer_index]}
                     </span>
                   )}
                 </div>
 
-                {/* Inset Group Table */}
-                <div className="rounded-2xl border border-black/[0.06] dark:border-white/[0.06] bg-neutral-50/70 dark:bg-black/30 divide-y divide-black/[0.06] dark:divide-white/[0.06] overflow-hidden text-xs">
-                  {/* Wrong pick row */}
-                  {selectedOption !== currentQ.answer_index && (
-                    <div className="p-3.5 space-y-1 bg-rose-500/[0.03]">
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase">
-                          Pilihan Anda ({selectedOption !== null && selectedOption >= 0 ? String.fromCharCode(65 + selectedOption) : 'Timeout'})
-                        </span>
-                        <span className="font-semibold text-neutral-900 dark:text-white">
-                          {selectedOption !== null && selectedOption >= 0 && currentQ.options[selectedOption]
-                            ? currentQ.options[selectedOption]
-                            : 'Waktu Habis'}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-neutral-600 dark:text-neutral-400 leading-relaxed pl-2.5 border-l-2 border-rose-500/40">
-                        <strong className="text-neutral-800 dark:text-neutral-200">Mengapa salah: </strong>
-                        {selectedOption !== null && selectedOption >= 0 && currentQ.option_explanations && currentQ.option_explanations[selectedOption]
-                          ? currentQ.option_explanations[selectedOption]
-                          : selectedOption !== null && selectedOption >= 0
-                            ? `Pilihan ${currentQ.options[selectedOption]} bukan jawaban tepat untuk pertanyaan ini.`
-                            : 'Waktu habis.'}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Correct answer row */}
-                  <div className="p-3.5 space-y-1 bg-emerald-500/[0.03]">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">
-                        Kunci Jawaban ({String.fromCharCode(65 + currentQ.answer_index)})
-                      </span>
-                      <span className="font-semibold text-neutral-900 dark:text-white">
-                        {currentQ.options[currentQ.answer_index]}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-neutral-600 dark:text-neutral-400 leading-relaxed pl-2.5 border-l-2 border-emerald-500/40">
-                      <strong className="text-neutral-800 dark:text-neutral-200">Alasan tepat: </strong>
-                      {currentQ.option_explanations && currentQ.option_explanations[currentQ.answer_index]
-                        ? currentQ.option_explanations[currentQ.answer_index]
-                        : currentQ.explanation}
-                    </p>
-                  </div>
+                {/* Explanation Content */}
+                <div className="rounded-2xl border border-black/[0.06] dark:border-white/[0.06] bg-neutral-50/80 dark:bg-black/30 p-3.5 space-y-1">
+                  <span className="text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-wider block">
+                    💡 Pembahasan:
+                  </span>
+                  <p className="text-xs text-neutral-700 dark:text-neutral-300 leading-relaxed">
+                    {currentQ.explanation || 'Jawaban di atas sesuai dengan fakta wawasan resmi.'}
+                  </p>
                 </div>
 
                 <button

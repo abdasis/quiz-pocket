@@ -716,10 +716,10 @@ export function QuizPlayer({
           })}
         </div>
 
-        {/* Unified Apple-Design Explanation Card upon Answered */}
+        {/* Clean Apple-Design Explanation Card upon Answered */}
         {isAnswered && (
-          <div className="rounded-3xl border border-black/[0.08] dark:border-white/[0.08] bg-white/90 dark:bg-[#121318]/90 backdrop-blur-2xl p-5 sm:p-6 shadow-xs space-y-4 animate-in fade-in zoom-in-95 duration-200">
-            {/* Header Badge */}
+          <div className="rounded-3xl border border-black/[0.08] dark:border-white/[0.08] bg-white/90 dark:bg-[#121318]/90 backdrop-blur-2xl p-5 sm:p-6 shadow-xs space-y-3.5 animate-in fade-in zoom-in-95 duration-200">
+            {/* Header Status */}
             <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] dark:border-white/[0.06]">
               <div className="flex items-center gap-2.5">
                 {selectedOption === currentQ.answer_index ? (
@@ -729,10 +729,10 @@ export function QuizPlayer({
                     </span>
                     <div>
                       <h4 className="text-xs sm:text-sm font-bold text-neutral-900 dark:text-white tracking-tight">
-                        Jawaban Tepat (+{currentQ.points || 10} Pts)
+                        Jawaban Benar (+{currentQ.points || 10} Pts)
                       </h4>
                       <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-                        Pemahaman Anda sudah sesuai dengan kaidah materi.
+                        Pilihan Anda tepat.
                       </p>
                     </div>
                   </div>
@@ -743,10 +743,10 @@ export function QuizPlayer({
                     </span>
                     <div>
                       <h4 className="text-xs sm:text-sm font-bold text-neutral-900 dark:text-white tracking-tight">
-                        Evaluasi & Analisis Jawaban
+                        Jawaban Kurang Tepat
                       </h4>
                       <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium">
-                        Pilihan Anda kurang tepat. Perhatikan perbandingan konsep berikut:
+                        Kunci jawaban yang benar adalah <span className="font-bold text-neutral-900 dark:text-white">{String.fromCharCode(65 + currentQ.answer_index)}. {currentQ.options[currentQ.answer_index]}</span>
                       </p>
                     </div>
                   </div>
@@ -754,51 +754,15 @@ export function QuizPlayer({
               </div>
             </div>
 
-            {/* Unified Inset Group Table */}
-            <div className="rounded-2xl border border-black/[0.06] dark:border-white/[0.06] bg-neutral-50/70 dark:bg-black/30 divide-y divide-black/[0.06] dark:divide-white/[0.06] overflow-hidden text-xs">
-              {/* Row 1: If User is Wrong -> Show why their pick was incorrect */}
-              {selectedOption !== currentQ.answer_index && (
-                <div className="p-3.5 sm:p-4 space-y-1.5 bg-rose-500/[0.03]">
-                  <div className="flex items-center justify-between">
-                    <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                      Pilihan Anda ({selectedOption !== null && selectedOption >= 0 ? String.fromCharCode(65 + selectedOption) : 'Timeout'})
-                    </span>
-                    <span className="font-semibold text-neutral-900 dark:text-white truncate max-w-[200px]">
-                      {selectedOption !== null && selectedOption >= 0 && currentQ.options[selectedOption]
-                        ? currentQ.options[selectedOption]
-                        : 'Waktu Habis'}
-                    </span>
-                  </div>
-                  <p className="text-[11px] sm:text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed pl-3 border-l-2 border-rose-500/40">
-                    <strong className="text-neutral-800 dark:text-neutral-200">Mengapa salah: </strong>
-                    {selectedOption !== null && selectedOption >= 0 && currentQ.option_explanations && currentQ.option_explanations[selectedOption]
-                      ? currentQ.option_explanations[selectedOption]
-                      : selectedOption !== null && selectedOption >= 0
-                        ? `Pilihan ${currentQ.options[selectedOption]} memiliki pengertian yang tidak sesuai dengan konteks pertanyaan ini.`
-                        : 'Waktu ujian per butir soal telah habis sebelum memilih opsi.'}
-                  </p>
-                </div>
-              )}
-
-              {/* Row 2: Right Answer and Why It's Correct */}
-              <div className="p-3.5 sm:p-4 space-y-1.5 bg-emerald-500/[0.03]">
-                <div className="flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    Kunci Jawaban ({String.fromCharCode(65 + currentQ.answer_index)})
-                  </span>
-                  <span className="font-semibold text-neutral-900 dark:text-white truncate max-w-[200px]">
-                    {currentQ.options[currentQ.answer_index]}
-                  </span>
-                </div>
-                <p className="text-[11px] sm:text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed pl-3 border-l-2 border-emerald-500/40">
-                  <strong className="text-neutral-800 dark:text-neutral-200">Alasan tepat: </strong>
-                  {currentQ.option_explanations && currentQ.option_explanations[currentQ.answer_index]
-                    ? currentQ.option_explanations[currentQ.answer_index]
-                    : currentQ.explanation}
-                </p>
+            {/* Focused Explanation Content */}
+            <div className="rounded-2xl border border-black/[0.06] dark:border-white/[0.06] bg-neutral-50/80 dark:bg-black/30 p-4 space-y-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-neutral-900 dark:text-white">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>Pembahasan & Kunci Jawaban:</span>
               </div>
+              <p className="exam-explanation text-neutral-700 dark:text-neutral-300 leading-relaxed text-xs sm:text-sm">
+                {currentQ.explanation || 'Jawaban di atas sesuai dengan fakta dan prinsip sains resmi.'}
+              </p>
             </div>
           </div>
         )}

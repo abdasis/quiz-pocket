@@ -470,62 +470,31 @@ function MainScreen() {
                     borderWidth: 1,
                     borderColor: colors.cardBorder,
                   }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: colors.cardBorder }}>
+                    <View style={{ marginBottom: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.cardBorder }}>
                       <Text style={{
                         fontSize: 13,
                         fontWeight: '700',
                         color: selectedOpt === currentQ.answer_index ? colors.emerald : colors.rose,
                       }}>
-                        {selectedOpt === currentQ.answer_index ? '✓ Jawaban Tepat (+10 Pts)' : '✗ Evaluasi Jawaban'}
+                        {selectedOpt === currentQ.answer_index ? '✓ Jawaban Benar (+10 Pts)' : `✗ Kurang Tepat — Kunci: ${String.fromCharCode(65 + currentQ.answer_index)}. ${currentQ.options[currentQ.answer_index]}`}
                       </Text>
                     </View>
 
-                    {/* Inset Group Section */}
+                    {/* Pembahasan Bersih */}
                     <View style={{
+                      padding: 12,
                       borderRadius: 16,
                       backgroundColor: colors.cardSubtle,
                       borderWidth: 1,
                       borderColor: colors.cardBorder,
-                      overflow: 'hidden',
                       marginBottom: 14,
                     }}>
-                      {selectedOpt !== currentQ.answer_index && (
-                        <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: colors.cardBorder, backgroundColor: 'rgba(244,63,94,0.03)' }}>
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                            <Text style={{ fontSize: 10, fontWeight: '700', color: colors.rose }}>
-                              PILIHAN ANDA ({selectedOpt !== null && selectedOpt >= 0 ? String.fromCharCode(65 + selectedOpt) : 'TIMEOUT'})
-                            </Text>
-                            <Text style={{ fontSize: 11, fontWeight: '600', color: colors.text }}>
-                              {selectedOpt !== null && selectedOpt >= 0 && currentQ.options[selectedOpt] ? currentQ.options[selectedOpt] : 'Waktu Habis'}
-                            </Text>
-                          </View>
-                          <Text style={{ fontSize: 11, color: colors.textMuted, lineHeight: 16 }}>
-                            <Text style={{ fontWeight: '700', color: colors.text }}>Mengapa salah: </Text>
-                            {selectedOpt !== null && selectedOpt >= 0 && (currentQ as any).option_explanations && (currentQ as any).option_explanations[selectedOpt]
-                              ? (currentQ as any).option_explanations[selectedOpt]
-                              : selectedOpt !== null && selectedOpt >= 0
-                                ? `Pilihan ${currentQ.options[selectedOpt]} bukan jawaban tepat.`
-                                : 'Waktu habis.'}
-                          </Text>
-                        </View>
-                      )}
-
-                      <View style={{ padding: 12, backgroundColor: 'rgba(16,185,129,0.03)' }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <Text style={{ fontSize: 10, fontWeight: '700', color: colors.emerald }}>
-                            KUNCI JAWABAN ({String.fromCharCode(65 + currentQ.answer_index)})
-                          </Text>
-                          <Text style={{ fontSize: 11, fontWeight: '600', color: colors.text }}>
-                            {currentQ.options[currentQ.answer_index]}
-                          </Text>
-                        </View>
-                        <Text style={{ fontSize: 11, color: colors.textMuted, lineHeight: 16 }}>
-                          <Text style={{ fontWeight: '700', color: colors.text }}>Alasan tepat: </Text>
-                          {(currentQ as any).option_explanations && (currentQ as any).option_explanations[currentQ.answer_index]
-                            ? (currentQ as any).option_explanations[currentQ.answer_index]
-                            : currentQ.explanation}
-                        </Text>
-                      </View>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted, marginBottom: 4 }}>
+                        💡 PEMBAHASAN:
+                      </Text>
+                      <Text style={{ fontSize: 11, color: colors.text, lineHeight: 16 }}>
+                        {currentQ.explanation || 'Jawaban di atas sesuai dengan fakta wawasan resmi.'}
+                      </Text>
                     </View>
 
                     <TouchableOpacity
