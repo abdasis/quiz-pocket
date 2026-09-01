@@ -124,7 +124,7 @@ type DuelMatch struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
-// Helper untuk mengambil dan mengacak bank soal secara deterministik tanpa pengulangan (Full-Cycle Permutation)
+// Helper untuk permutasi Fisher-Yates per siklus (non-repeating deterministic cycle)
 func getLevelPermutation(totalQuestions int, slotID int64, seedOffset byte) []int {
 	if totalQuestions == 0 {
 		return []int{}
@@ -140,6 +140,7 @@ func getLevelPermutation(totalQuestions int, slotID int64, seedOffset byte) []in
 	h.Write([]byte{seedOffset})
 	cycleSeed := h.Sum(nil)
 
+	// Fisher-Yates Shuffle murni menggunakan seed siklus
 	for i := totalQuestions - 1; i > 0; i-- {
 		j := int(cycleSeed[(int(seedOffset)+i)%len(cycleSeed)]) % (i + 1)
 		perm[i], perm[j] = perm[j], perm[i]
@@ -187,7 +188,8 @@ func getLiveSlotQuestions(db *gorm.DB) []Question {
 
 	var slotQuestions []Question
 
-	pickWithoutRepeat := func(list []Question, count int, seedOffset byte) {
+	// Kombinasi Fisher-Yates Shuffle deterministik slot hash + non-repeating cycle window
+	pickQuestionsDeterministic := func(list []Question, count int, seedOffset byte) {
 		n := len(list)
 		if n == 0 {
 			return
@@ -213,10 +215,11 @@ func getLiveSlotQuestions(db *gorm.DB) []Question {
 		}
 	}
 
-	pickWithoutRepeat(sdQuestions, countSD, seedBytes[0])
-	pickWithoutRepeat(smpQuestions, countSMP, seedBytes[1])
-	pickWithoutRepeat(smaQuestions, countSMA, seedBytes[2])
+	pickQuestionsDeterministic(sdQuestions, countSD, seedBytes[0])
+	pickQuestionsDeterministic(smpQuestions, countSMP, seedBytes[1])
+	pickQuestionsDeterministic(smaQuestions, countSMA, seedBytes[2])
 
+	// Final Fisher-Yates cross-level shuffle agar jenjang tersebar merata
 	for i := len(slotQuestions) - 1; i > 0; i-- {
 		j := int(seedBytes[(i*7)%len(seedBytes)]) % (i + 1)
 		slotQuestions[i], slotQuestions[j] = slotQuestions[j], slotQuestions[i]
@@ -425,7 +428,8 @@ func main() {
 		var slotQuestions []Question
 		var questionIDs []uint
 
-		pickWithoutRepeat := func(list []Question, count int, seedOffset byte) {
+		// Kombinasi Fisher-Yates Shuffle deterministik slot hash + non-repeating cycle window
+		pickQuestionsDeterministic := func(list []Question, count int, seedOffset byte) {
 			n := len(list)
 			if n == 0 {
 				return
@@ -452,11 +456,11 @@ func main() {
 			}
 		}
 
-		pickWithoutRepeat(sdQuestions, countSD, seedBytes[0])
-		pickWithoutRepeat(smpQuestions, countSMP, seedBytes[1])
-		pickWithoutRepeat(smaQuestions, countSMA, seedBytes[2])
+		pickQuestionsDeterministic(sdQuestions, countSD, seedBytes[0])
+		pickQuestionsDeterministic(smpQuestions, countSMP, seedBytes[1])
+		pickQuestionsDeterministic(smaQuestions, countSMA, seedBytes[2])
 
-		// Acak final urutan seluruh soal antar-tingkat agar tidak mengelompok SD dulu
+		// Acak final urutan seluruh soal antar-tingkat menggunakan Fisher-Yates agar acak rata
 		for i := len(slotQuestions) - 1; i > 0; i-- {
 			j := int(seedBytes[(i*7)%len(seedBytes)]) % (i + 1)
 			slotQuestions[i], slotQuestions[j] = slotQuestions[j], slotQuestions[i]
