@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Trophy, Flame, Moon, Sun, ArrowLeft, LogIn, LogOut, Award, BarChart2 } from 'lucide-react'
+import { Trophy, Flame, Moon, Sun, ArrowLeft, LogIn, LogOut, Award, BarChart2, UserCog } from 'lucide-react'
 
 export interface AuthUser {
   id: number
@@ -23,6 +23,7 @@ interface AppHeaderProps {
   onToggleTheme: () => void
   onHomeClick: () => void
   onOpenProfileModal?: () => void
+  onOpenEditProfileModal?: () => void
   currentTitle?: string
   user: AuthUser | null
   onOpenLogin: () => void
@@ -34,6 +35,7 @@ export function AppHeader({
   onToggleTheme,
   onHomeClick,
   onOpenProfileModal,
+  onOpenEditProfileModal,
   currentTitle,
   user,
   onOpenLogin,
@@ -146,6 +148,17 @@ export function AppHeader({
                     <p className="text-xs font-bold text-neutral-900 dark:text-white truncate">{user.name}</p>
                     <p className="text-[11px] text-neutral-400 truncate">{user.email}</p>
                   </div>
+
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false)
+                      if (onOpenEditProfileModal) onOpenEditProfileModal()
+                    }}
+                    className="w-full px-4 py-2 text-left text-xs font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-900/60 flex items-center gap-2 cursor-pointer"
+                  >
+                    <UserCog className="w-4 h-4 text-indigo-500" />
+                    <span>Edit Nama & Foto</span>
+                  </button>
 
                   <button
                     onClick={() => {

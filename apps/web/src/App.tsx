@@ -4,6 +4,7 @@ import { QuizPlayer, type Question } from './quiz-player'
 import { LoginModal } from './login-modal'
 import { StatsModal } from './stats-modal'
 import { SessionHistoryModal } from './session-history-modal'
+import { EditProfileModal } from './edit-profile-modal'
 import { getUserTitle } from './user-ranks'
 import { 
   Trophy, 
@@ -71,6 +72,7 @@ export function App() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false)
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false)
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false)
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false)
 
   // Live 30-Min Slot State
   const [liveSlot, setLiveSlot] = useState<LiveSlotResponse | null>(null)
@@ -274,6 +276,7 @@ export function App() {
           setIsPracticeMode(false)
         }}
         onOpenProfileModal={() => setIsStatsModalOpen(true)}
+        onOpenEditProfileModal={() => setIsEditProfileOpen(true)}
         currentTitle={isPlaying ? (isPracticeMode ? 'Mode Latihan Mandiri' : 'Kuis Terpadu (SD · SMP · SMA)') : undefined}
         user={user}
         onOpenLogin={() => setIsLoginModalOpen(true)}
@@ -590,6 +593,19 @@ export function App() {
       <SessionHistoryModal
         isOpen={isHistoryModalOpen}
         onClose={() => setIsHistoryModalOpen(false)}
+      />
+
+      {/* Edit Profile Modal */}
+      <EditProfileModal
+        isOpen={isEditProfileOpen}
+        onClose={() => setIsEditProfileOpen(false)}
+        user={user}
+        onProfileUpdated={(updated) => {
+          setUser(updated)
+          localStorage.setItem('quiz_pocket_user', JSON.stringify(updated))
+          fetchLeaderboard()
+          fetchLiveSlot()
+        }}
       />
 
       {/* Login Modal */}

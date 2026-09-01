@@ -164,7 +164,45 @@ func main() {
 		})
 	})
 
-	// 2. User Profile + Stats Breakdown
+	// 2. User Profile Update (Ganti Nama & Photo Profile)
+	api.Put("/user/profile", func(c *fiber.Ctx) error {
+		var req struct {
+			Email     string `json:"email"`
+			Name      string `json:"name"`
+			AvatarURL string `json:"avatar_url"`
+		}
+		if err := c.BodyParser(&req); err != nil || req.Email == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "Email is required"})
+		}
+
+		var user User
+		if err := db.Where("email = ?", req.Email).First(&user).Error; err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": "User not found"})
+		}
+
+		if req.Name != "" {
+			user.Name = req.Name
+		}
+		if req.AvatarURL != "" {
+			user.AvatarURL = req.AvatarURL
+		}
+		if err := db.Save(&user).Error; err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Failed to update profile"})
+		}
+
+		// Sync username/avatar ke submissions lampau agar seragam
+		db.Model(&QuizSlotSubmission{}).Where("user_id = ?", user.ID).Updates(map[string]interface{}{
+			"user_name":  user.Name,
+			"avatar_url": user.AvatarURL,
+		})
+
+		return c.JSON(fiber.Map{
+			"success": true,
+			"data":    user,
+		})
+	})
+
+	// 3. User Profile + Stats Breakdown
 	api.Get("/user/profile", func(c *fiber.Ctx) error {
 		email := c.Query("email")
 		if email == "" {
