@@ -60,8 +60,12 @@ export function App() {
   })
   
   const [user, setUser] = useState<AuthUser | null>(() => {
-    const saved = localStorage.getItem('quiz_pocket_user')
-    return saved ? JSON.parse(saved) : null
+    try {
+      const saved = localStorage.getItem('quiz_pocket_user')
+      return (saved && saved !== 'undefined') ? JSON.parse(saved) : null
+    } catch {
+      return null
+    }
   })
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false)
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false)
