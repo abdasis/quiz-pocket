@@ -126,6 +126,22 @@ type DuelMatch struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
+// Article: Model Artikel Wawasan
+type Article struct {
+	ID              uint       `gorm:"primaryKey" json:"id"`
+	Slug            string     `gorm:"not null;column:slug" json:"slug"`
+	Title           string     `gorm:"not null" json:"title"`
+	Summary         string     `gorm:"type:text;not null" json:"summary"`
+	Content         string     `gorm:"type:text;not null" json:"content"`
+	Category        string     `json:"category"`
+	Level           string     `json:"level"`
+	ReadTimeMinutes int        `gorm:"default:3" json:"read_time_minutes"`
+	Icon            string     `gorm:"default:'book'" json:"icon"`
+	Questions       []Question `gorm:"many2many:article_questions;" json:"questions,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
 // Helper untuk permutasi Fisher-Yates per siklus (non-repeating deterministic cycle)
 func getLevelPermutation(totalQuestions int, slotID int64, seedOffset byte) []int {
 	if totalQuestions == 0 {
@@ -242,7 +258,7 @@ func main() {
 		log.Fatalf("Failed to connect to Postgres: %v", err)
 	}
 
-	// Auto-migrate schema
+	// Auto-migrate schema (excluding Article from AutoMigrate to prevent GORM DDL conflict)
 	if err := db.AutoMigrate(&User{}, &Category{}, &Question{}, &QuizSession{}, &QuizSlotSubmission{}, &DuelMatch{}); err != nil {
 		log.Fatalf("Auto-migration failed: %v", err)
 	}
@@ -936,6 +952,45 @@ func main() {
 		return c.JSON(fiber.Map{
 			"success": true,
 			"match":   match,
+		})
+	})
+
+	// 12. Daftar Artikel Wawasan
+	api.Get("/articles", func(c *fiber.Ctx) error {
+		var articles []Article
+		if err := db.Order("id ASC").Find(&articles).Error; err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(fiber.Map{
+			"success": true,
+			"articles": articles,
+		})
+	})
+
+	// 13. Detail Artikel Wawasan Beserta Soal Terkait
+	api.Get("/articles/:slug", func(c *fiber.Ctx) error {
+		slug := c.Params("slug")
+		var article Article
+		if err := db.Preload("Questions").Where("slug = ?", slug).First(&article).Error; err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": "Article not found"})
+		}
+
+		for i := range article.Questions {
+			var opts []string
+			if err := json.Unmarshal([]byte(article.Questions[i].Options), &opts); err == nil {
+				article.Questions[i].OptionsList = opts
+			}
+			if article.Questions[i].OptionExplanations != "" {
+				var explList []string
+				if err := json.Unmarshal([]byte(article.Questions[i].OptionExplanations), &explList); err == nil {
+					article.Questions[i].OptionExplanationsList = explList
+				}
+			}
+		}
+
+		return c.JSON(fiber.Map{
+			"success": true,
+			"article": article,
 		})
 	})
 

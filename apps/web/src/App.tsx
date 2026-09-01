@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { AppHeader, type AuthUser } from './app-header'
 import { QuizPlayer, type Question } from './quiz-player'
 import { DuelArena } from './duel-arena'
+import { ArticlesView } from './articles-view'
 import { LoginModal } from './login-modal'
 import { StatsModal } from './stats-modal'
 import { SessionHistoryModal } from './session-history-modal'
@@ -83,6 +84,7 @@ export function App() {
   const [secondsLeft, setSecondsLeft] = useState<number>(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isPlayingDuel, setIsPlayingDuel] = useState(false)
+  const [isArticlesMode, setIsArticlesMode] = useState(false)
   const [isPracticeMode, setIsPracticeMode] = useState(false)
   const [practiceQuestions, setPracticeQuestions] = useState<Question[]>([])
 
@@ -249,6 +251,15 @@ export function App() {
               localStorage.setItem('quiz_pocket_user', JSON.stringify(updated))
             }}
           />
+        ) : isArticlesMode ? (
+          <ArticlesView
+            onStartPracticeWithQuestions={(questions) => {
+              setPracticeQuestions(questions)
+              setIsPracticeMode(true)
+              setIsArticlesMode(false)
+              setIsPlaying(true)
+            }}
+          />
         ) : isPlaying ? (
           <QuizPlayer
             questions={isPracticeMode ? practiceQuestions : (liveSlot?.questions || [])}
@@ -390,8 +401,16 @@ export function App() {
 
                     <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                       <button
+                        onClick={() => setIsArticlesMode(true)}
+                        className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-2 pressable shadow-xs"
+                      >
+                        <BookOpen className="w-4 h-4" />
+                        Baca Artikel
+                      </button>
+
+                      <button
                         onClick={handleStartDuel}
-                        className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-2 pressable shadow-sm"
+                        className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-2 pressable shadow-xs"
                       >
                         <Swords className="w-4 h-4" />
                         Tanding 1 vs 1
@@ -399,7 +418,7 @@ export function App() {
 
                       <button
                         onClick={handleStartPracticeMode}
-                        className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-white dark:bg-[#1c1c22] border border-black/[0.08] dark:border-white/[0.12] text-xs font-semibold text-neutral-800 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors flex items-center justify-center gap-2 pressable"
+                        className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-white dark:bg-[#1c1c22] border border-black/[0.08] dark:border-white/[0.12] text-xs font-semibold text-neutral-800 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors flex items-center justify-center gap-2 pressable"
                       >
                         <Gamepad2 className="w-4 h-4 text-amber-500" />
                         Mode Latihan
@@ -422,6 +441,14 @@ export function App() {
                     >
                       <Swords className="w-4 h-4" />
                       Tanding 1 vs 1
+                    </button>
+
+                    <button
+                      onClick={() => setIsArticlesMode(true)}
+                      className="px-5 py-3.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border border-emerald-200/50 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-300 font-bold text-sm transition-all flex items-center justify-center gap-2 pressable"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      Modul Artikel
                     </button>
                   </div>
                 )}
