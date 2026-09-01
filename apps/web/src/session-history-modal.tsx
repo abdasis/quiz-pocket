@@ -10,8 +10,8 @@ interface SessionHistoryItem {
     category_title: string
     question_count: number
   }
-  participants_count: number
-  participants: Array<{
+  participants: number
+  submissions?: Array<{
     id: number
     user_email: string
     user_name: string
@@ -19,6 +19,7 @@ interface SessionHistoryItem {
     score: number
     total: number
     correct_count: number
+    time_spent_sec?: number
     created_at: string
   }>
 }
@@ -116,7 +117,7 @@ export function SessionHistoryModal({ isOpen, onClose }: SessionHistoryModalProp
                   </p>
                 </div>
                 <span className="px-2.5 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-bold font-mono border border-indigo-200/60 dark:border-indigo-800/40">
-                  {selectedSession.participants_count} Partisipan
+                  {selectedSession.participants || (selectedSession.submissions?.length || 0)} Partisipan
                 </span>
               </div>
             </div>
@@ -126,14 +127,14 @@ export function SessionHistoryModal({ isOpen, onClose }: SessionHistoryModalProp
                 Daftar Nilai Peserta Sesi Ini
               </h5>
 
-              {selectedSession.participants.length === 0 ? (
+              {(!selectedSession.submissions || selectedSession.submissions.length === 0) ? (
                 <div className="p-8 text-center text-xs text-neutral-400">
                   Tidak ada peserta yang menyelesaikan kuis pada sesi ini.
                 </div>
               ) : (
                 <div className="divide-y divide-black/[0.04] dark:divide-white/[0.04] rounded-2xl bg-white dark:bg-[#151518] border border-black/[0.06] dark:border-white/[0.08] overflow-hidden">
-                  {selectedSession.participants.map((p, idx) => (
-                    <div key={p.id} className="p-3.5 sm:px-4 flex items-center justify-between text-xs">
+                  {selectedSession.submissions.map((p, idx) => (
+                    <div key={p.id || idx} className="p-3.5 sm:px-4 flex items-center justify-between text-xs">
                       <div className="flex items-center gap-3">
                         <span className="w-5 font-mono font-bold text-neutral-400">{idx + 1}</span>
                         <div className="w-7 h-7 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
@@ -147,7 +148,9 @@ export function SessionHistoryModal({ isOpen, onClose }: SessionHistoryModalProp
                         </div>
                         <div>
                           <p className="font-semibold text-neutral-900 dark:text-white">{p.user_name || p.user_email}</p>
-                          <p className="text-[10px] text-neutral-400 font-mono">{p.correct_count} Benar</p>
+                          <p className="text-[10px] text-neutral-400 font-mono">
+                            {p.correct_count} Benar {p.time_spent_sec ? `• ${Math.floor(p.time_spent_sec / 60)}m ${p.time_spent_sec % 60}s` : ''}
+                          </p>
                         </div>
                       </div>
 
@@ -196,7 +199,7 @@ export function SessionHistoryModal({ isOpen, onClose }: SessionHistoryModalProp
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-xs font-mono font-semibold text-neutral-600 dark:text-neutral-400 flex items-center gap-1">
                       <Users className="w-3.5 h-3.5 text-indigo-500" />
-                      {item.participants_count} Peserta
+                      {item.participants || (item.submissions?.length || 0)} Peserta
                     </span>
                     <ChevronRight className="w-4 h-4 text-neutral-400" />
                   </div>
