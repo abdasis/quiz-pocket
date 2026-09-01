@@ -5,18 +5,25 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "splash": {
-      "backgroundColor": "#000000"
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0c"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "my.id.abdasis.quizpocket"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#000000"
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundColor": "#0a0a0c"
       },
       "package": "my.id.abdasis.quizpocket"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     }
   }
 }
