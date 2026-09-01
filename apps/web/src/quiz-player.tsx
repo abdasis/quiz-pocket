@@ -64,16 +64,22 @@ export function QuizPlayer({
   // Load saved state or initialize
   const loadInitialState = (): SavedExamState => {
     if (!isPracticeMode) {
-      const saved = localStorage.getItem(storageKey)
-      if (saved) {
-        try {
+      try {
+        const saved = localStorage.getItem(storageKey)
+        if (saved) {
           const parsed: SavedExamState = JSON.parse(saved)
-          if (parsed.slotId === slotId && parsed.currentIndex < questions.length) {
+          if (
+            parsed && 
+            parsed.slotId === slotId && 
+            typeof parsed.currentIndex === 'number' &&
+            parsed.currentIndex >= 0 &&
+            parsed.currentIndex < questions.length
+          ) {
             return parsed
           }
-        } catch {
-          // ignore corrupted json
         }
+      } catch {
+        localStorage.removeItem(storageKey)
       }
     }
     return {
