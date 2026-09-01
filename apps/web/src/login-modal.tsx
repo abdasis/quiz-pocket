@@ -16,7 +16,6 @@ declare global {
 
 export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps) {
   const [errorMsg, setErrorMsg] = useState('')
-  const [isSdkLoaded, setIsSdkLoaded] = useState(false)
   const btnContainerRef = useRef<HTMLDivElement>(null)
 
   const handleCredentialResponse = useCallback(async (response: any) => {
@@ -65,19 +64,21 @@ export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
 
     const initButton = () => {
       if (window.google?.accounts?.id && btnContainerRef.current) {
-        setIsSdkLoaded(true)
         window.google.accounts.id.initialize({
           client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
           callback: handleCredentialResponse,
           auto_select: false,
+          use_fedcm_for_prompt: false,
         })
         btnContainerRef.current.innerHTML = ''
         window.google.accounts.id.renderButton(btnContainerRef.current, {
+          type: 'standard',
           theme: 'filled_blue',
           size: 'large',
           width: 320,
-          text: 'continue_with',
+          text: 'signin_with',
           shape: 'pill',
+          logo_alignment: 'left',
         })
         if (intervalId) clearInterval(intervalId)
       }
@@ -124,12 +125,12 @@ export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
           </p>
         </div>
 
-        {/* Single Google Sign-In Button */}
-        <div className="flex flex-col items-center justify-center min-h-[50px] py-2">
-          <div ref={btnContainerRef} className="flex justify-center w-full min-h-[44px]"></div>
-          {!isSdkLoaded && (
-            <p className="text-xs text-neutral-400 animate-pulse">Memuat Google Sign-In...</p>
-          )}
+        {/* Single Google Sign-In Button Container */}
+        <div className="flex flex-col items-center justify-center min-h-[44px] py-1">
+          <div 
+            ref={btnContainerRef} 
+            className="flex justify-center items-center w-full min-h-[44px] overflow-hidden"
+          />
         </div>
 
         {errorMsg && (
