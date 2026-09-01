@@ -186,29 +186,33 @@ func main() {
 		randomIndex := int(seedBytes[3]) % len(countOptions)
 		targetCount := countOptions[randomIndex]
 
-		// Fetch questions for this category (or cross categories if needed)
-		var allQuestions []Question
-		db.Where("category_id = ?", activeCategory.ID).Order("id ASC").Find(&allQuestions)
-		if len(allQuestions) < targetCount {
-			// Fallback: mix from other non-IT non-religion categories
-			db.Order("id ASC").Find(&allQuestions)
+		// Komposisi Seimbang: Ambil campuran soal dari setiap tingkatan (SD, SMP, SMA)
+		var sdQuestions, smpQuestions, smaQuestions []Question
+		db.Where("level = ?", "SD").Order("id ASC").Find(&sdQuestions)
+		db.Where("level = ?", "SMP").Order("id ASC").Find(&smpQuestions)
+		db.Where("level = ?", "SMA").Order("id ASC").Find(&smaQuestions)
+
+		// Hitung alokasi per jenjang sesuai target total
+		var countSD, countSMP, countSMA int
+		if targetCount == 10 {
+			countSD, countSMP, countSMA = 4, 3, 3 // Total 10
+		} else if targetCount == 15 {
+			countSD, countSMP, countSMA = 5, 5, 5 // Total 15
+		} else { // 20
+			countSD, countSMP, countSMA = 7, 7, 6 // Total 20
 		}
 
 		var slotQuestions []Question
-		if len(allQuestions) > 0 {
-			h := sha256.New()
-			binary.Write(h, binary.BigEndian, slotID)
-			seedBytes := h.Sum(nil)
 
-			count := targetCount
-			if len(allQuestions) < count {
-				count = len(allQuestions)
+		// Helper untuk pick soal acak deterministik per jenjang
+		pickQuestions := func(list []Question, count int, seedOffset byte) {
+			if len(list) == 0 {
+				return
 			}
-
-			offset := int(seedBytes[0]) % len(allQuestions)
-			for i := 0; i < count; i++ {
-				idx := (offset + i) % len(allQuestions)
-				q := allQuestions[idx]
+			offset := int(seedOffset) % len(list)
+			for i := 0; i < count && i < len(list); i++ {
+				idx := (offset + i) % len(list)
+				q := list[idx]
 				var opts []string
 				if err := json.Unmarshal([]byte(q.Options), &opts); err == nil {
 					q.OptionsList = opts
@@ -216,6 +220,10 @@ func main() {
 				slotQuestions = append(slotQuestions, q)
 			}
 		}
+
+		pickQuestions(sdQuestions, countSD, seedBytes[0])
+		pickQuestions(smpQuestions, countSMP, seedBytes[1])
+		pickQuestions(smaQuestions, countSMA, seedBytes[2])
 
 		var submission QuizSlotSubmission
 		isCompleted := false
