@@ -8,10 +8,12 @@ export interface UserRankTitle {
   tier: number
 }
 
+// Kalibrasi realistis berdasarkan poin kuis:
+// SD = 10 pts, SMP = 20 pts, SMA = 30 pts (Rata-rata 1 sesi 10-15 soal = ~150-250 pts)
 export const USER_TITLES: UserRankTitle[] = [
   {
     title: 'Begawan Nalar',
-    minPoints: 5000,
+    minPoints: 2000,
     colorClass: 'text-rose-500 dark:text-rose-400',
     bgClass: 'bg-rose-50 dark:bg-rose-950/50',
     borderClass: 'border-rose-200/80 dark:border-rose-800/60',
@@ -20,7 +22,7 @@ export const USER_TITLES: UserRankTitle[] = [
   },
   {
     title: 'Mahaguru',
-    minPoints: 3500,
+    minPoints: 1400,
     colorClass: 'text-amber-500 dark:text-amber-400',
     bgClass: 'bg-amber-50 dark:bg-amber-950/50',
     borderClass: 'border-amber-200/80 dark:border-amber-800/60',
@@ -29,7 +31,7 @@ export const USER_TITLES: UserRankTitle[] = [
   },
   {
     title: 'Suhu Nalar',
-    minPoints: 2200,
+    minPoints: 950,
     colorClass: 'text-orange-500 dark:text-orange-400',
     bgClass: 'bg-orange-50 dark:bg-orange-950/50',
     borderClass: 'border-orange-200/80 dark:border-orange-800/60',
@@ -38,7 +40,7 @@ export const USER_TITLES: UserRankTitle[] = [
   },
   {
     title: 'Cendekiawan Utama',
-    minPoints: 1500,
+    minPoints: 650,
     colorClass: 'text-violet-600 dark:text-violet-400',
     bgClass: 'bg-violet-50 dark:bg-violet-950/50',
     borderClass: 'border-violet-200/80 dark:border-violet-800/60',
@@ -47,7 +49,7 @@ export const USER_TITLES: UserRankTitle[] = [
   },
   {
     title: 'Cendekiawan Muda',
-    minPoints: 1000,
+    minPoints: 420,
     colorClass: 'text-purple-600 dark:text-purple-400',
     bgClass: 'bg-purple-50 dark:bg-purple-950/50',
     borderClass: 'border-purple-200/80 dark:border-purple-800/60',
@@ -56,7 +58,7 @@ export const USER_TITLES: UserRankTitle[] = [
   },
   {
     title: 'Pakar Penjelajah',
-    minPoints: 650,
+    minPoints: 260,
     colorClass: 'text-indigo-600 dark:text-indigo-400',
     bgClass: 'bg-indigo-50 dark:bg-indigo-950/50',
     borderClass: 'border-indigo-200/80 dark:border-indigo-800/60',
@@ -65,7 +67,7 @@ export const USER_TITLES: UserRankTitle[] = [
   },
   {
     title: 'Penjelajah Wawasan',
-    minPoints: 350,
+    minPoints: 140,
     colorClass: 'text-blue-600 dark:text-blue-400',
     bgClass: 'bg-blue-50 dark:bg-blue-950/50',
     borderClass: 'border-blue-200/80 dark:border-blue-800/60',
@@ -74,7 +76,7 @@ export const USER_TITLES: UserRankTitle[] = [
   },
   {
     title: 'Pengelana Gigih',
-    minPoints: 180,
+    minPoints: 70,
     colorClass: 'text-teal-600 dark:text-teal-400',
     bgClass: 'bg-teal-50 dark:bg-teal-950/50',
     borderClass: 'border-teal-200/80 dark:border-teal-800/60',
@@ -83,7 +85,7 @@ export const USER_TITLES: UserRankTitle[] = [
   },
   {
     title: 'Pencari Ilmu',
-    minPoints: 60,
+    minPoints: 20,
     colorClass: 'text-emerald-600 dark:text-emerald-400',
     bgClass: 'bg-emerald-50 dark:bg-emerald-950/50',
     borderClass: 'border-emerald-200/80 dark:border-emerald-800/60',
