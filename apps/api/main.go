@@ -61,12 +61,28 @@ type Question struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// QuizSession: Menyimpan snapshot soal yang aktif dan metadata sesi per 30 menit
+type QuizSession struct {
+	ID               uint      `gorm:"primaryKey" json:"id"`
+	SlotID           int64     `gorm:"uniqueIndex;not null" json:"slot_id"`
+	SlotStart        time.Time `json:"slot_start"`
+	SlotEnd          time.Time `json:"slot_end"`
+	CategoryID       uint      `json:"category_id"`
+	CategoryTitle    string    `json:"category_title"`
+	QuestionCount    int       `json:"question_count"`
+	QuestionIDs      string    `gorm:"type:text" json:"-"` // JSON array string e.g. [1, 5, 12]
+	QuestionsPayload string    `gorm:"type:text" json:"-"` // Snapshot JSON full array
+	CreatedAt        time.Time `json:"created_at"`
+}
+
+// QuizSlotSubmission: Riwayat partisipan dan skor yang dicapai per sesi
 type QuizSlotSubmission struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
 	SlotID       int64     `gorm:"index:idx_user_slot,unique;not null" json:"slot_id"`
 	UserID       uint      `gorm:"index:idx_user_slot,unique;not null" json:"user_id"`
 	UserEmail    string    `json:"user_email"`
 	UserName     string    `json:"user_name"`
+	AvatarURL    string    `json:"avatar_url"`
 	CategoryID   uint      `json:"category_id"`
 	Score        int       `json:"score"`
 	Total        int       `json:"total"`
@@ -82,8 +98,8 @@ func main() {
 		log.Fatalf("Failed to connect to Postgres: %v", err)
 	}
 
-	// Auto-migrate
-	if err := db.AutoMigrate(&User{}, &Category{}, &Question{}, &QuizSlotSubmission{}); err != nil {
+	// Auto-migrate schema
+	if err := db.AutoMigrate(&User{}, &Category{}, &Question{}, &QuizSession{}, &QuizSlotSubmission{}); err != nil {
 		log.Fatalf("Auto-migration failed: %v", err)
 	}
 
@@ -159,7 +175,6 @@ func main() {
 			return c.Status(404).JSON(fiber.Map{"error": "User not found"})
 		}
 
-		// Calculate Daily Multiplier
 		multiplier := 1.0
 		if user.Streak >= 7 {
 			multiplier = 1.5
@@ -168,13 +183,13 @@ func main() {
 		}
 
 		return c.JSON(fiber.Map{
-			"success": true, 
-			"data": user,
+			"success":           true,
+			"data":              user,
 			"streak_multiplier": multiplier,
 		})
 	})
 
-	// 3. Current Live 30-Minute Slot Query (Dynamic 10, 15, or 20 questions)
+	// 3. Current Live 30-Minute Slot Query & Snapshot Persistence
 	api.Get("/live-slot", func(c *fiber.Ctx) error {
 		userEmail := c.Query("email")
 		now := time.Now()
@@ -202,7 +217,7 @@ func main() {
 		randomIndex := int(seedBytes[3]) % len(countOptions)
 		targetCount := countOptions[randomIndex]
 
-		// Komposisi Seimbang: Ambil campuran soal dari setiap tingkatan (SD, SMP, SMA)
+		// Komposisi Seimbang: Campuran soal dari setiap tingkatan (SD, SMP, SMA)
 		var sdQuestions, smpQuestions, smaQuestions []Question
 		db.Where("level = ?", "SD").Order("id ASC").Find(&sdQuestions)
 		db.Where("level = ?", "SMP").Order("id ASC").Find(&smpQuestions)
@@ -210,14 +225,15 @@ func main() {
 
 		var countSD, countSMP, countSMA int
 		if targetCount == 10 {
-			countSD, countSMP, countSMA = 4, 3, 3 // Total 10
+			countSD, countSMP, countSMA = 4, 3, 3
 		} else if targetCount == 15 {
-			countSD, countSMP, countSMA = 5, 5, 5 // Total 15
-		} else { // 20
-			countSD, countSMP, countSMA = 7, 7, 6 // Total 20
+			countSD, countSMP, countSMA = 5, 5, 5
+		} else {
+			countSD, countSMP, countSMA = 7, 7, 6
 		}
 
 		var slotQuestions []Question
+		var questionIDs []uint
 
 		pickQuestions := func(list []Question, count int, seedOffset byte) {
 			if len(list) == 0 {
@@ -232,6 +248,7 @@ func main() {
 					q.OptionsList = opts
 				}
 				slotQuestions = append(slotQuestions, q)
+				questionIDs = append(questionIDs, q.ID)
 			}
 		}
 
@@ -239,10 +256,32 @@ func main() {
 		pickQuestions(smpQuestions, countSMP, seedBytes[1])
 		pickQuestions(smaQuestions, countSMA, seedBytes[2])
 
-		var submission QuizSlotSubmission
+		// Save/Ensure QuizSession Snapshot di Database
+		var session QuizSession
+		if err := db.Where("slot_id = ?", slotID).First(&session).Error; err != nil {
+			qIDsBytes, _ := json.Marshal(questionIDs)
+			qPayloadBytes, _ := json.Marshal(slotQuestions)
+			session = QuizSession{
+				SlotID:           slotID,
+				SlotStart:        slotStartTime,
+				SlotEnd:          slotEndTime,
+				CategoryID:       activeCategory.ID,
+				CategoryTitle:    activeCategory.Title,
+				QuestionCount:    len(slotQuestions),
+				QuestionIDs:      string(qIDsBytes),
+				QuestionsPayload: string(qPayloadBytes),
+			}
+			db.Create(&session)
+		}
+
+		// Hitung Partisipan yang sudah submit di sesi ini
+		var participants []QuizSlotSubmission
+		db.Where("slot_id = ?", slotID).Order("score DESC, created_at ASC").Find(&participants)
+
+		var userSubmission QuizSlotSubmission
 		isCompleted := false
 		if userEmail != "" {
-			err := db.Where("slot_id = ? AND user_email = ?", slotID, userEmail).First(&submission).Error
+			err := db.Where("slot_id = ? AND user_email = ?", slotID, userEmail).First(&userSubmission).Error
 			if err == nil {
 				isCompleted = true
 			}
@@ -258,11 +297,41 @@ func main() {
 			"questions":         slotQuestions,
 			"question_count":    len(slotQuestions),
 			"is_completed":      isCompleted,
-			"submission":        submission,
+			"submission":        userSubmission,
+			"participants_count": len(participants),
+			"participants":      participants,
 		})
 	})
 
-	// 4. Practice Mode Endpoint (Random 10 Questions, No Points, For Waiting Time)
+	// 4. Session History List Endpoint (Menampilkan daftar semua sesi lampau beserta soal & partisipannya)
+	api.Get("/sessions/history", func(c *fiber.Ctx) error {
+		var sessions []QuizSession
+		db.Order("slot_id DESC").Limit(20).Find(&sessions)
+
+		type SessionHistoryItem struct {
+			Session           QuizSession          `json:"session"`
+			ParticipantsCount int64                `json:"participants_count"`
+			Participants      []QuizSlotSubmission `json:"participants"`
+		}
+
+		var result []SessionHistoryItem
+		for _, s := range sessions {
+			var subs []QuizSlotSubmission
+			db.Where("slot_id = ?", s.SlotID).Order("score DESC").Find(&subs)
+			result = append(result, SessionHistoryItem{
+				Session:           s,
+				ParticipantsCount: int64(len(subs)),
+				Participants:      subs,
+			})
+		}
+
+		return c.JSON(fiber.Map{
+			"success": true,
+			"data":    result,
+		})
+	})
+
+	// 5. Practice Mode Endpoint (Random 10 Questions, No Points)
 	api.Get("/practice-questions", func(c *fiber.Ctx) error {
 		var questions []Question
 		db.Order("RANDOM()").Limit(10).Find(&questions)
@@ -278,7 +347,7 @@ func main() {
 		})
 	})
 
-	// 5. Submit Live Slot (With Streak Multiplier & Analytics Breakdown)
+	// 6. Submit Live Slot (With Streak Multiplier & Analytics Breakdown)
 	api.Post("/live-slot/submit", func(c *fiber.Ctx) error {
 		var req struct {
 			SlotID       int64  `json:"slot_id"`
@@ -340,6 +409,7 @@ func main() {
 			UserID:       user.ID,
 			UserEmail:    user.Email,
 			UserName:     user.Name,
+			AvatarURL:    user.AvatarURL,
 			Score:        finalScoreAwarded,
 			Total:        req.Total,
 			CorrectCount: req.CorrectCount,
@@ -370,7 +440,7 @@ func main() {
 		})
 	})
 
-	// 6. Global Leaderboard
+	// 7. Global Leaderboard
 	api.Get("/leaderboard", func(c *fiber.Ctx) error {
 		var users []User
 		db.Order("points DESC, quizzes_completed DESC, updated_at ASC").Limit(25).Find(&users)

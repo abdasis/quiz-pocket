@@ -3,6 +3,7 @@ import { AppHeader, type AuthUser } from './app-header'
 import { QuizPlayer, type Question } from './quiz-player'
 import { LoginModal } from './login-modal'
 import { StatsModal } from './stats-modal'
+import { SessionHistoryModal } from './session-history-modal'
 import { getUserTitle } from './user-ranks'
 import { 
   Trophy, 
@@ -16,7 +17,8 @@ import {
   ShieldCheck,
   Flame,
   Gamepad2,
-  BarChart3
+  BarChart3,
+  History
 } from 'lucide-react'
 
 interface Category {
@@ -68,6 +70,7 @@ export function App() {
   })
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false)
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false)
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false)
 
   // Live 30-Min Slot State
   const [liveSlot, setLiveSlot] = useState<LiveSlotResponse | null>(null)
@@ -308,6 +311,14 @@ export function App() {
 
               {/* Live Slot Status Pill & Stats Quick Button */}
               <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                <button
+                  onClick={() => setIsHistoryModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-100 dark:bg-neutral-800/80 hover:bg-neutral-200/80 dark:hover:bg-neutral-700/60 border border-black/[0.04] dark:border-white/[0.06] text-xs font-semibold text-neutral-700 dark:text-neutral-300 cursor-pointer pressable"
+                >
+                  <History className="w-3.5 h-3.5" />
+                  <span>Arsip Sesi</span>
+                </button>
+
                 {user && (
                   <button
                     onClick={() => setIsStatsModalOpen(true)}
@@ -573,6 +584,12 @@ export function App() {
         isOpen={isStatsModalOpen}
         onClose={() => setIsStatsModalOpen(false)}
         user={user}
+      />
+
+      {/* Session History Modal */}
+      <SessionHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
       />
 
       {/* Login Modal */}
