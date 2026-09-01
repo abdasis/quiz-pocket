@@ -3,6 +3,7 @@ import { AppHeader, type AuthUser } from './app-header'
 import { QuizPlayer, type Question } from './quiz-player'
 import { LoginModal } from './login-modal'
 import { StatsModal } from './stats-modal'
+import { getUserTitle } from './user-ranks'
 import { 
   Trophy, 
   Clock, 
@@ -313,7 +314,7 @@ export function App() {
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/60 dark:border-indigo-800/40 text-xs font-semibold text-indigo-700 dark:text-indigo-300 cursor-pointer pressable"
                   >
                     <BarChart3 className="w-3.5 h-3.5" />
-                    <span>Rapor Saya</span>
+                    <span>Rapor & Gelar</span>
                   </button>
                 )}
 
@@ -359,7 +360,7 @@ export function App() {
                       Kuis Terpadu Wawasan Nyata & Sains
                     </h3>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                      Kombinasi soal pilihan tingkat SD, SMP, dan SMA. Poin dihitung bertingkat (SD +10, SMP +20, SMA +30) dan diakumulasikan ke papan peringkat global.
+                      Kombinasi soal pilihan tingkat SD, SMP, dan SMA. Dapatkan <span className="font-semibold text-neutral-900 dark:text-white">Bonus Kecepatan (+5)</span> & <span className="font-semibold text-amber-500">Combo Multiplier (hingga 2.0x)</span> jika menjawab benar secara berturut-turut!
                     </p>
                   </div>
 
@@ -479,7 +480,7 @@ export function App() {
                   </div>
                   <div>
                     <h3 className="text-base font-semibold text-neutral-900 dark:text-white">Papan Peringkat Global</h3>
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400">Akumulasi skor seluruh sesi yang telah diselesaikan</p>
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400">Akumulasi skor dan gelar kehormatan seluruh pemain</p>
                   </div>
                 </div>
                 <div className="text-xs text-neutral-400 font-mono">
@@ -497,6 +498,7 @@ export function App() {
                   leaderboard.map((lbUser, idx) => {
                     const isCurrentUser = user?.email === lbUser.email
                     const rank = idx + 1
+                    const rankTitle = getUserTitle(lbUser.points || 0)
 
                     return (
                       <div
@@ -507,7 +509,7 @@ export function App() {
                             : 'hover:bg-neutral-50/50 dark:hover:bg-neutral-900/30'
                         } transition-colors`}
                       >
-                        {/* Left Info: Rank + Avatar + Name */}
+                        {/* Left Info: Rank + Avatar + Name + Title Badge */}
                         <div className="flex items-center gap-3.5 min-w-0">
                           <span className="w-6 text-center text-xs font-mono font-bold text-neutral-400 dark:text-neutral-500 shrink-0">
                             {rank === 1 ? '01' : rank === 2 ? '02' : rank === 3 ? '03' : rank < 10 ? `0${rank}` : rank}
@@ -524,15 +526,23 @@ export function App() {
                           </div>
 
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-neutral-900 dark:text-white truncate flex items-center gap-2">
-                              <span>{lbUser.name || lbUser.email.split('@')[0]}</span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm font-semibold text-neutral-900 dark:text-white truncate">
+                                {lbUser.name || lbUser.email.split('@')[0]}
+                              </p>
+                              
+                              {/* Honor Title Badge */}
+                              <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-lg border ${rankTitle.bgClass} ${rankTitle.colorClass} ${rankTitle.borderClass}`}>
+                                {rankTitle.title}
+                              </span>
+
                               {isCurrentUser && (
                                 <span className="text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/40">
                                   Kamu
                                 </span>
                               )}
-                            </p>
-                            <p className="text-[11px] text-neutral-400 font-mono flex items-center gap-2">
+                            </div>
+                            <p className="text-[11px] text-neutral-400 font-mono flex items-center gap-2 mt-0.5">
                               <span>{lbUser.quizzes_completed || 0} kuis selesai</span>
                               <span>•</span>
                               <span className="text-amber-500 flex items-center gap-0.5">

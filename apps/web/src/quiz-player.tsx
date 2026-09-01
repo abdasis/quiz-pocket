@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowRight, RotateCcw, Award, Clock, Sparkles, Check, X, ArrowLeft, ShieldAlert, AlertTriangle, Share2, Copy, CheckCheck } from 'lucide-react'
+import { ArrowRight, RotateCcw, Award, Clock, Sparkles, Check, X, ArrowLeft, ShieldAlert, AlertTriangle, Share2, Copy, CheckCheck, Zap } from 'lucide-react'
 import confetti from 'canvas-confetti'
 
 export interface Question {
@@ -49,6 +49,11 @@ export function QuizPlayer({
   const [correctCount, setCorrectCount] = useState(0)
   const [secondsLeft, setSecondsLeft] = useState(30)
   const [isCompleted, setIsCompleted] = useState(false)
+
+  // Combo & Speed Bonus States
+  const [combo, setCombo] = useState(0)
+  const [maxCombo, setMaxCombo] = useState(0)
+  const [showFeedbackBadge, setShowFeedbackBadge] = useState<string | null>(null)
 
   // Level breakdowns
   const [sdStats, setSdStats] = useState({ correct: 0, total: 0 })
@@ -149,6 +154,8 @@ export function QuizPlayer({
 
   const handleTimeOut = () => {
     setIsAnswered(true)
+    setCombo(0)
+    setShowFeedbackBadge('Waktu Habis!')
   }
 
   const handleSelectOption = (idx: number) => {
@@ -158,6 +165,7 @@ export function QuizPlayer({
 
     const isCorrect = idx === currentQ.answer_index
     const level = currentQ.level || 'SD'
+    const basePoints = currentQ.points || 10
 
     if (level === 'SD') {
       setSdStats((prev) => ({ correct: prev.correct + (isCorrect ? 1 : 0), total: prev.total + 1 }))
@@ -168,8 +176,38 @@ export function QuizPlayer({
     }
 
     if (isCorrect) {
-      setScore((prev) => prev + (currentQ.points || 10))
+      // Speed Bonus: Jawab cepat dalam < 5 detik pertama (secondsLeft >= 25)
+      let speedBonus = 0
+      if (secondsLeft >= 25) {
+        speedBonus = 5 // Bonus +5 poin
+      }
+
+      // Combo System
+      const nextCombo = combo + 1
+      setCombo(nextCombo)
+      if (nextCombo > maxCombo) {
+        setMaxCombo(nextCombo)
+      }
+
+      let multiplier = 1
+      if (nextCombo >= 5) multiplier = 2
+      else if (nextCombo >= 3) multiplier = 1.5
+
+      const earnedPoints = Math.round((basePoints * multiplier) + speedBonus)
+      setScore((prev) => prev + earnedPoints)
       setCorrectCount((prev) => prev + 1)
+
+      if (multiplier > 1 || speedBonus > 0) {
+        const feedback = []
+        if (speedBonus > 0) feedback.push('⚡ Super Cepat (+5)')
+        if (multiplier > 1) feedback.push(`🔥 Combo x${multiplier}`)
+        setShowFeedbackBadge(feedback.join(' · '))
+      } else {
+        setShowFeedbackBadge('Jawaban Tepat! (+10)')
+      }
+    } else {
+      setCombo(0)
+      setShowFeedbackBadge('Kurang Tepat')
     }
   }
 
@@ -178,12 +216,13 @@ export function QuizPlayer({
       setCurrentIndex((prev) => prev + 1)
       setSelectedOption(null)
       setIsAnswered(false)
+      setShowFeedbackBadge(null)
       setSecondsLeft(30)
     } else {
       setIsCompleted(true)
       confetti({
-        particleCount: 100,
-        spread: 80,
+        particleCount: 120,
+        spread: 90,
         origin: { y: 0.6 },
       })
       const maxPoints = questions.reduce((acc, q) => acc + (q.points || 10), 0)
@@ -212,18 +251,21 @@ export function QuizPlayer({
     setIsDisqualified(false)
     setTabSwitches(0)
     setShowWarning(null)
+    setCombo(0)
+    setMaxCombo(0)
+    setShowFeedbackBadge(null)
     setSdStats({ correct: 0, total: 0 })
     setSmpStats({ correct: 0, total: 0 })
     setSmaStats({ correct: 0, total: 0 })
   }
 
   const handleShareWhatsApp = (accuracy: number) => {
-    const text = `🎯 Saya baru saja menyelesaikan Kuis Wawasan Real-Life di Quiz Pocket!\n\nSkor: +${score} Poin (${correctCount}/${questions.length} Benar)\nAkurasi: ${accuracy}%\nStreak: ${streak} Hari 🔥\n\nYuk ikutan asah logika & sains di: https://quiz.abdasis.my.id`
+    const text = `🎯 Saya baru saja menyelesaikan Kuis Wawasan Real-Life di Quiz Pocket!\n\nSkor: +${score} Poin (${correctCount}/${questions.length} Benar)\nAkurasi: ${accuracy}%\nMax Combo: ${maxCombo}x 🔥\nStreak: ${streak} Hari\n\nYuk ikutan asah logika & sains di: https://quiz.abdasis.my.id`
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank')
   }
 
   const handleCopyShare = (accuracy: number) => {
-    const text = `🎯 Saya baru saja menyelesaikan Kuis Wawasan Real-Life di Quiz Pocket!\n\nSkor: +${score} Poin (${correctCount}/${questions.length} Benar)\nAkurasi: ${accuracy}%\nStreak: ${streak} Hari 🔥\n\nYuk ikutan asah logika & sains di: https://quiz.abdasis.my.id`
+    const text = `🎯 Saya baru saja menyelesaikan Kuis Wawasan Real-Life di Quiz Pocket!\n\nSkor: +${score} Poin (${correctCount}/${questions.length} Benar)\nAkurasi: ${accuracy}%\nMax Combo: ${maxCombo}x 🔥\nStreak: ${streak} Hari\n\nYuk ikutan asah logika & sains di: https://quiz.abdasis.my.id`
     navigator.clipboard.writeText(text)
     setCopiedLink(true)
     setTimeout(() => setCopiedLink(false), 2000)
@@ -279,7 +321,7 @@ export function QuizPlayer({
             <p className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed font-normal">
               {isPracticeMode
                 ? 'Bagus sekali! Kamu telah melatih logika dan ingatanmu sambil menunggu rotasi kuis utama.'
-                : 'Hasil dan akumulasi poin kamu telah berhasil dicatat ke sistem dan leaderboard secara valid.'}
+                : 'Hasil, poin kombo, dan riwayat akurasi kamu telah berhasil dicatat ke sistem dan leaderboard secara valid.'}
             </p>
           </div>
 
@@ -295,18 +337,22 @@ export function QuizPlayer({
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2 text-center sm:text-left">
               <div>
-                <span className="text-[10px] text-neutral-400">Poin</span>
-                <p className="text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400">+{score}</p>
+                <span className="text-[10px] text-neutral-400">Total Poin</span>
+                <p className="text-base sm:text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400">+{score}</p>
               </div>
               <div>
                 <span className="text-[10px] text-neutral-400">Benar</span>
-                <p className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">{correctCount}/{questions.length}</p>
+                <p className="text-base sm:text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">{correctCount}/{questions.length}</p>
               </div>
               <div>
                 <span className="text-[10px] text-neutral-400">Akurasi</span>
-                <p className="text-lg font-bold font-mono text-neutral-900 dark:text-white">{accuracy}%</p>
+                <p className="text-base sm:text-lg font-bold font-mono text-neutral-900 dark:text-white">{accuracy}%</p>
+              </div>
+              <div>
+                <span className="text-[10px] text-neutral-400">Max Combo</span>
+                <p className="text-base sm:text-lg font-bold font-mono text-amber-600 dark:text-amber-400">{maxCombo}x 🔥</p>
               </div>
             </div>
 
@@ -392,8 +438,16 @@ export function QuizPlayer({
             </div>
           </div>
 
-          {/* Right Metrics: Anti-Cheat Tab Status + Tier Badge + Question Countdown */}
+          {/* Right Metrics: Combo Pill + Anti-Cheat Tab Status + Tier Badge + Question Countdown */}
           <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
+            {/* Combo Streak Indicator */}
+            {combo >= 2 && (
+              <span className="px-2.5 py-1 rounded-xl bg-amber-500 text-white text-xs font-bold font-mono flex items-center gap-1 shadow-xs animate-bounce">
+                <Zap className="w-3.5 h-3.5 fill-current" />
+                <span>Combo {combo}x {combo >= 5 ? '(2.0x)' : '(1.5x)'}</span>
+              </span>
+            )}
+
             {tabSwitches > 0 && !isPracticeMode && (
               <span className="px-2.5 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-xs font-semibold border border-amber-200/60 dark:border-amber-800/40 flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3 text-amber-500" />
@@ -408,6 +462,8 @@ export function QuizPlayer({
             <div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl font-mono text-xs font-semibold border ${
               secondsLeft <= 5 
                 ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 animate-pulse'
+                : secondsLeft >= 25
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-300'
                 : 'bg-neutral-100 dark:bg-neutral-800/60 border-black/[0.04] dark:border-white/[0.06] text-neutral-700 dark:text-neutral-300'
             }`}>
               <Clock className="w-3.5 h-3.5" />
@@ -435,10 +491,16 @@ export function QuizPlayer({
       <section className="bg-white dark:bg-[#111114] rounded-3xl border border-black/[0.06] dark:border-white/[0.08] p-6 sm:p-9 space-y-7">
         {/* Question Text Area */}
         <div className="space-y-3.5">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between">
             <span className="text-[11px] font-mono font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest px-2.5 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200/60 dark:border-indigo-800/40">
               Pertanyaan {currentIndex + 1}
             </span>
+
+            {showFeedbackBadge && (
+              <span className="text-xs font-bold font-mono text-indigo-600 dark:text-indigo-400 animate-in fade-in">
+                {showFeedbackBadge}
+              </span>
+            )}
           </div>
           <h2 className="exam-question text-neutral-950 dark:text-neutral-50 leading-snug">
             {currentQ.question}

@@ -1,5 +1,6 @@
-import { X, Flame, BookOpen, Compass, GraduationCap, Award } from 'lucide-react'
+import { X, Flame, BookOpen, Compass, GraduationCap, Award, Zap } from 'lucide-react'
 import type { AuthUser } from './app-header'
+import { getUserTitle } from './user-ranks'
 
 interface StatsModalProps {
   isOpen: boolean
@@ -9,6 +10,8 @@ interface StatsModalProps {
 
 export function StatsModal({ isOpen, onClose, user }: StatsModalProps) {
   if (!isOpen || !user) return null
+
+  const userTitle = getUserTitle(user.points || 0)
 
   const sdTotal = user.sd_total || 0
   const sdCorrect = user.sd_correct || 0
@@ -30,7 +33,7 @@ export function StatsModal({ isOpen, onClose, user }: StatsModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg bg-white dark:bg-[#111114] rounded-3xl border border-black/[0.08] dark:border-white/[0.1] shadow-2xl p-6 sm:p-8 space-y-6 animate-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-lg bg-white dark:bg-[#111114] rounded-3xl border border-black/[0.08] dark:border-white/[0.1] shadow-2xl p-6 sm:p-8 space-y-6 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -38,7 +41,7 @@ export function StatsModal({ isOpen, onClose, user }: StatsModalProps) {
               <Award className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-neutral-950 dark:text-white">Rapor Wawasan & Statistik</h3>
+              <h3 className="text-lg font-bold text-neutral-950 dark:text-white">Rapor Wawasan & Gelar</h3>
               <p className="text-xs text-neutral-500 font-medium">Evaluasi nalar berdasarkan jenjang pendidikan</p>
             </div>
           </div>
@@ -51,29 +54,43 @@ export function StatsModal({ isOpen, onClose, user }: StatsModalProps) {
           </button>
         </div>
 
-        {/* User Summary Top Card */}
-        <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-black/[0.04] dark:border-white/[0.04] flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
-              {user.avatar_url ? (
-                <img src={user.avatar_url} alt={user.name} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-xs font-bold text-neutral-500">
-                  {user.name ? user.name[0].toUpperCase() : 'U'}
-                </div>
-              )}
+        {/* User Summary Top Card with Honor Title */}
+        <div className="p-5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-black/[0.04] dark:border-white/[0.04] space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
+                {user.avatar_url ? (
+                  <img src={user.avatar_url} alt={user.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-xs font-bold text-neutral-500">
+                    {user.name ? user.name[0].toUpperCase() : 'U'}
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-neutral-900 dark:text-white">{user.name}</p>
+                <p className="text-xs text-neutral-400 font-mono">{user.points || 0} Total Poin</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-bold text-neutral-900 dark:text-white">{user.name}</p>
-              <p className="text-xs text-neutral-400 font-mono">{user.points || 0} Total Poin</p>
+
+            <div className="text-right">
+              <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs font-bold font-mono border border-amber-200/60 dark:border-amber-800/40">
+                <Flame className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                <span>{user.streak || 1} Hari ({streakMultiplier})</span>
+              </div>
             </div>
           </div>
 
-          <div className="text-right">
-            <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs font-bold font-mono border border-amber-200/60 dark:border-amber-800/40">
-              <Flame className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-              <span>{user.streak || 1} Hari ({streakMultiplier})</span>
+          {/* Honor Title Banner */}
+          <div className={`p-3 rounded-xl border flex items-center justify-between ${userTitle.bgClass} ${userTitle.borderClass}`}>
+            <div className="flex items-center gap-2">
+              <Zap className={`w-4 h-4 ${userTitle.colorClass}`} />
+              <div>
+                <span className={`text-xs font-bold font-mono ${userTitle.colorClass}`}>Gelar: {userTitle.title}</span>
+                <p className="text-[11px] text-neutral-600 dark:text-neutral-400">{userTitle.description}</p>
+              </div>
             </div>
+            <span className="text-[10px] font-mono text-neutral-400">Min {userTitle.minPoints} pts</span>
           </div>
         </div>
 
