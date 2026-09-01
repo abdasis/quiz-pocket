@@ -716,86 +716,89 @@ export function QuizPlayer({
           })}
         </div>
 
-        {/* Explanation Card upon Answered */}
+        {/* Unified Apple-Design Explanation Card upon Answered */}
         {isAnswered && (
-          <div className={`p-5 rounded-2xl border space-y-3 animate-in fade-in duration-200 ${
-            selectedOption === currentQ.answer_index
-              ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200/60 dark:border-emerald-800/40'
-              : 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200/60 dark:border-rose-800/40'
-          }`}>
-            {/* Status Header */}
-            <div className="flex items-center justify-between pb-2 border-b border-black/[0.05] dark:border-white/[0.05]">
-              <div className="flex items-center gap-2">
+          <div className="rounded-3xl border border-black/[0.08] dark:border-white/[0.08] bg-white/90 dark:bg-[#121318]/90 backdrop-blur-2xl p-5 sm:p-6 shadow-xs space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            {/* Header Badge */}
+            <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] dark:border-white/[0.06]">
+              <div className="flex items-center gap-2.5">
                 {selectedOption === currentQ.answer_index ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300">
-                      Jawaban Anda Benar! (+{currentQ.points || 10} Pts)
+                  <div className="flex items-center gap-2">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="w-4 h-4" />
                     </span>
-                  </>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-bold text-neutral-900 dark:text-white tracking-tight">
+                        Jawaban Tepat (+{currentQ.points || 10} Pts)
+                      </h4>
+                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                        Pemahaman Anda sudah sesuai dengan kaidah materi.
+                      </p>
+                    </div>
+                  </div>
                 ) : (
-                  <>
-                    <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
-                    <span className="text-xs font-bold text-rose-900 dark:text-rose-300">
-                      Jawaban Anda Kurang Tepat
+                  <div className="flex items-center gap-2">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400">
+                      <XCircle className="w-4 h-4" />
                     </span>
-                  </>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-bold text-neutral-900 dark:text-white tracking-tight">
+                        Evaluasi & Analisis Jawaban
+                      </h4>
+                      <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium">
+                        Pilihan Anda kurang tepat. Perhatikan perbandingan konsep berikut:
+                      </p>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
 
-            {/* Answer Comparison Details if Wrong */}
-            {selectedOption !== currentQ.answer_index && (
-              <div className="space-y-2 text-xs">
-                <div className="p-3.5 rounded-xl bg-white/80 dark:bg-[#151518]/80 border border-rose-200/50 dark:border-rose-900/40 space-y-1.5">
+            {/* Unified Inset Group Table */}
+            <div className="rounded-2xl border border-black/[0.06] dark:border-white/[0.06] bg-neutral-50/70 dark:bg-black/30 divide-y divide-black/[0.06] dark:divide-white/[0.06] overflow-hidden text-xs">
+              {/* Row 1: If User is Wrong -> Show why their pick was incorrect */}
+              {selectedOption !== currentQ.answer_index && (
+                <div className="p-3.5 sm:p-4 space-y-1.5 bg-rose-500/[0.03]">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono font-bold text-rose-500 uppercase tracking-wider">
-                      Pilihan Anda (Salah):
+                    <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                      Pilihan Anda ({selectedOption !== null && selectedOption >= 0 ? String.fromCharCode(65 + selectedOption) : 'Timeout'})
                     </span>
-                    <span className="font-bold text-rose-600 dark:text-rose-400">
+                    <span className="font-semibold text-neutral-900 dark:text-white truncate max-w-[200px]">
                       {selectedOption !== null && selectedOption >= 0 && currentQ.options[selectedOption]
-                        ? `${String.fromCharCode(65 + selectedOption)}. ${currentQ.options[selectedOption]}`
+                        ? currentQ.options[selectedOption]
                         : 'Waktu Habis'}
                     </span>
                   </div>
-                  <p className="text-neutral-600 dark:text-neutral-400 text-[11px] leading-relaxed">
-                    <span className="font-semibold text-rose-600 dark:text-rose-400">Mengapa salah: </span>
+                  <p className="text-[11px] sm:text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed pl-3 border-l-2 border-rose-500/40">
+                    <strong className="text-neutral-800 dark:text-neutral-200">Mengapa salah: </strong>
                     {selectedOption !== null && selectedOption >= 0 && currentQ.option_explanations && currentQ.option_explanations[selectedOption]
                       ? currentQ.option_explanations[selectedOption]
                       : selectedOption !== null && selectedOption >= 0
-                        ? `Pilihan ${currentQ.options[selectedOption]} bukan jawaban yang tepat untuk konteks pertanyaan ini.`
-                        : 'Waktu menjawab telah habis sebelum opsi dipilih.'}
+                        ? `Pilihan ${currentQ.options[selectedOption]} memiliki pengertian yang tidak sesuai dengan konteks pertanyaan ini.`
+                        : 'Waktu ujian per butir soal telah habis sebelum memilih opsi.'}
                   </p>
                 </div>
+              )}
 
-                <div className="p-3.5 rounded-xl bg-white/80 dark:bg-[#151518]/80 border border-emerald-200/50 dark:border-emerald-900/40 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono font-bold text-emerald-600 uppercase tracking-wider">
-                      Jawaban Benar Seharusnya:
-                    </span>
-                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                      {String.fromCharCode(65 + currentQ.answer_index)}. {currentQ.options[currentQ.answer_index]}
-                    </span>
-                  </div>
-                  <p className="text-neutral-600 dark:text-neutral-400 text-[11px] leading-relaxed">
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">Alasan tepat: </span>
-                    {currentQ.option_explanations && currentQ.option_explanations[currentQ.answer_index]
-                      ? currentQ.option_explanations[currentQ.answer_index]
-                      : currentQ.explanation}
-                  </p>
+              {/* Row 2: Right Answer and Why It's Correct */}
+              <div className="p-3.5 sm:p-4 space-y-1.5 bg-emerald-500/[0.03]">
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    Kunci Jawaban ({String.fromCharCode(65 + currentQ.answer_index)})
+                  </span>
+                  <span className="font-semibold text-neutral-900 dark:text-white truncate max-w-[200px]">
+                    {currentQ.options[currentQ.answer_index]}
+                  </span>
                 </div>
+                <p className="text-[11px] sm:text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed pl-3 border-l-2 border-emerald-500/40">
+                  <strong className="text-neutral-800 dark:text-neutral-200">Alasan tepat: </strong>
+                  {currentQ.option_explanations && currentQ.option_explanations[currentQ.answer_index]
+                    ? currentQ.option_explanations[currentQ.answer_index]
+                    : currentQ.explanation}
+                </p>
               </div>
-            )}
-
-            {/* In-depth Conceptual Explanation */}
-            <div className="space-y-1 pt-1">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-neutral-800 dark:text-neutral-200">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>Pembahasan & Konsep Ilmiah:</span>
-              </div>
-              <p className="exam-explanation text-neutral-700 dark:text-neutral-300 leading-relaxed text-xs sm:text-sm">
-                {currentQ.explanation || 'Jawaban di atas sesuai dengan prinsip sains dan fakta wawasan resmi.'}
-              </p>
             </div>
           </div>
         )}
