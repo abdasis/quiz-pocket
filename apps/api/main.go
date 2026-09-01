@@ -543,6 +543,9 @@ func main() {
 		})
 	})
 
+	// Static Downloads Serving (Direct APK Downloads)
+	app.Static("/downloads", "/home/abdasis/Projects/quiz-pocket/apps/web/dist/downloads")
+
 	// Static Web Frontend Serving
 	app.Static("/assets", "/home/abdasis/Projects/quiz-pocket/apps/web/dist/assets")
 	app.Get("/*", func(c *fiber.Ctx) error {

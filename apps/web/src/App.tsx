@@ -18,7 +18,8 @@ import {
   ShieldCheck,
   Flame,
   Gamepad2,
-  CalendarDays
+  CalendarDays,
+  Smartphone
 } from 'lucide-react'
 
 interface LeaderboardUser {
@@ -559,6 +560,26 @@ export function App() {
           </div>
         )}
       </main>
+
+      {/* Footer with Android APK Download Link */}
+      {!isPlaying && (
+        <footer className="w-full max-w-4xl mx-auto px-4 py-8 border-t border-black/[0.06] dark:border-white/[0.06] mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-neutral-500">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-neutral-900 dark:text-white">Quiz Pocket</span>
+            <span>•</span>
+            <span>Platform Kuis & Uji Nalar Terpadu</span>
+          </div>
+
+          <a
+            href="https://quiz.abdasis.my.id/downloads/quiz-pocket-latest.apk"
+            download
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 font-semibold hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors pressable"
+          >
+            <Smartphone className="w-4 h-4 text-emerald-400 dark:text-emerald-600" />
+            <span>Download APK Android</span>
+          </a>
+        </footer>
+      )}
 
       {/* Login Modal */}
       <LoginModal
