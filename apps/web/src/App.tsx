@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { AppHeader, type AuthUser } from './app-header'
 import { QuizPlayer, type Question } from './quiz-player'
 import { DuelArena } from './duel-arena'
@@ -205,6 +205,14 @@ export function App() {
     const s = secs % 60
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
   }
+
+  const handleLoginSuccess = useCallback((loggedUser: AuthUser) => {
+    setUser(loggedUser)
+    localStorage.setItem('quiz_pocket_user', JSON.stringify(loggedUser))
+    setIsLoginModalOpen(false)
+    fetchLiveSlot()
+    fetchLeaderboard(leaderboardTab)
+  }, [fetchLiveSlot, fetchLeaderboard, leaderboardTab])
 
   return (
     <div className="min-h-screen bg-[#f5f5f7] dark:bg-[#000000] text-neutral-900 dark:text-neutral-100 flex flex-col font-sans transition-colors duration-200">
@@ -644,16 +652,11 @@ export function App() {
       )}
 
       {/* Login Modal */}
+      {/* Login Modal */}
       <LoginModal
         isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
-        onLoginSuccess={(loggedUser) => {
-          setUser(loggedUser)
-          localStorage.setItem('quiz_pocket_user', JSON.stringify(loggedUser))
-          setIsLoginModalOpen(false)
-          fetchLiveSlot()
-          fetchLeaderboard(leaderboardTab)
-        }}
+        onLoginSuccess={handleLoginSuccess}
       />
 
       {/* Stats / Report Modal */}

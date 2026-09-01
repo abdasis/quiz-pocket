@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { X, Sparkles, ShieldCheck, AlertCircle } from 'lucide-react'
 import type { AuthUser } from './app-header'
 
@@ -17,73 +17,88 @@ declare global {
 export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps) {
   const [errorMsg, setErrorMsg] = useState('')
   const [isSdkLoaded, setIsSdkLoaded] = useState(false)
+  const btnContainerRef = useRef<HTMLDivElement>(null)
+
+  const handleCredentialResponse = useCallback(async (response: any) => {
+    try {
+      const base64Url = response.credential.split('.')[1]
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      )
+      const payload = JSON.parse(jsonPayload)
+
+      // Login & sync profile via backend
+      const res = await fetch('/api/v1/auth/google-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: payload.email,
+          name: payload.name,
+          avatar_url: payload.picture,
+          google_id: payload.sub,
+        }),
+      })
+      const json = await res.json()
+      if (json.success && (json.user || json.data)) {
+        const authUser = json.user || json.data
+        onLoginSuccess(authUser)
+        onClose()
+      } else {
+        setErrorMsg(json.error || 'Gagal autentikasi akun Google.')
+      }
+    } catch (err) {
+      console.error('Google Auth Error:', err)
+      setErrorMsg('Gagal memproses data akun Google.')
+    }
+  }, [onLoginSuccess, onClose])
 
   // Initialize Google Sign-In SDK
   useEffect(() => {
     if (!isOpen) return
 
-    const handleCredentialResponse = async (response: any) => {
-      try {
-        const base64Url = response.credential.split('.')[1]
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-        const jsonPayload = decodeURIComponent(
-          atob(base64)
-            .split('')
-            .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-            .join('')
-        )
-        const payload = JSON.parse(jsonPayload)
+    let intervalId: any = null
+    let isCancelled = false
 
-        // Login & sync profile via backend
-        const res = await fetch('/api/v1/auth/google-login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: payload.email,
-            name: payload.name,
-            avatar_url: payload.picture,
-            google_id: payload.sub,
-          }),
-        })
-        const json = await res.json()
-        if (json.success && (json.user || json.data)) {
-          const authUser = json.user || json.data
-          onLoginSuccess(authUser)
-          onClose()
-        } else {
-          setErrorMsg(json.error || 'Gagal autentikasi akun Google.')
-        }
-      } catch (err) {
-        console.error('Google Auth Error:', err)
-        setErrorMsg('Gagal memproses data akun Google.')
-      }
-    }
-
-    const checkAndInitGoogle = () => {
-      if (window.google?.accounts?.id) {
+    const initButton = () => {
+      if (window.google?.accounts?.id && btnContainerRef.current) {
         setIsSdkLoaded(true)
         window.google.accounts.id.initialize({
           client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
           callback: handleCredentialResponse,
           auto_select: false,
         })
-        const btnParent = document.getElementById('googleSignInBtn')
-        if (btnParent) {
-          btnParent.innerHTML = ''
-          window.google.accounts.id.renderButton(btnParent, {
-            theme: 'filled_blue',
-            size: 'large',
-            width: 320,
-            text: 'continue_with',
-            shape: 'pill',
-          })
-        }
+        btnContainerRef.current.innerHTML = ''
+        window.google.accounts.id.renderButton(btnContainerRef.current, {
+          theme: 'filled_blue',
+          size: 'large',
+          width: 320,
+          text: 'continue_with',
+          shape: 'pill',
+        })
+        if (intervalId) clearInterval(intervalId)
       }
     }
 
-    const timer = setTimeout(checkAndInitGoogle, 100)
-    return () => clearTimeout(timer)
-  }, [isOpen, onLoginSuccess, onClose])
+    if (window.google?.accounts?.id) {
+      initButton()
+    } else {
+      intervalId = setInterval(() => {
+        if (isCancelled) return
+        if (window.google?.accounts?.id) {
+          initButton()
+        }
+      }, 200)
+    }
+
+    return () => {
+      isCancelled = true
+      if (intervalId) clearInterval(intervalId)
+    }
+  }, [isOpen, handleCredentialResponse])
 
   if (!isOpen) return null
 
@@ -111,7 +126,7 @@ export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
 
         {/* Single Google Sign-In Button */}
         <div className="flex flex-col items-center justify-center min-h-[50px] py-2">
-          <div id="googleSignInBtn" className="flex justify-center w-full"></div>
+          <div ref={btnContainerRef} className="flex justify-center w-full min-h-[44px]"></div>
           {!isSdkLoaded && (
             <p className="text-xs text-neutral-400 animate-pulse">Memuat Google Sign-In...</p>
           )}
