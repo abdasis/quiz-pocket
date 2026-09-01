@@ -21,8 +21,10 @@ type User struct {
 	Email            string    `gorm:"uniqueIndex;not null" json:"email"`
 	Name             string    `json:"name"`
 	AvatarURL        string    `json:"avatar_url"`
-	GoogleID         string    `gorm:"index" json:"google_id"`
+	GoogleID         string    `json:"google_id"`
 	Points           int       `gorm:"default:0" json:"points"`
+	WeeklyPoints     int       `gorm:"default:0" json:"weekly_points"`
+	CurrentWeekKey   string    `json:"current_week_key"` // e.g. "2026-W36"
 	QuizzesCompleted int       `gorm:"default:0" json:"quizzes_completed"`
 	Streak           int       `gorm:"default:1" json:"streak"`
 	LastActiveDate   string    `json:"last_active_date"` // YYYY-MM-DD
@@ -91,6 +93,11 @@ type QuizSlotSubmission struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+func getISOWeekKey(t time.Time) string {
+	year, week := t.ISOWeek()
+	return fmt.Sprintf("%d-W%02d", year, week)
+}
+
 func main() {
 	dsn := "host=/var/run/postgresql dbname=quiz_pocket sslmode=disable"
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
@@ -129,6 +136,7 @@ func main() {
 		}
 
 		todayStr := time.Now().Format("2006-01-02")
+		currentWeek := getISOWeekKey(time.Now())
 		var user User
 		err := db.Where("email = ?", req.Email).First(&user).Error
 		if err != nil {
@@ -138,6 +146,8 @@ func main() {
 				AvatarURL:        req.AvatarURL,
 				GoogleID:         req.GoogleID,
 				Points:           0,
+				WeeklyPoints:     0,
+				CurrentWeekKey:   currentWeek,
 				QuizzesCompleted: 0,
 				Streak:           1,
 				LastActiveDate:   todayStr,
@@ -146,21 +156,23 @@ func main() {
 				return c.Status(500).JSON(fiber.Map{"error": "Failed to create user"})
 			}
 		} else {
-			if req.Name != "" {
+			// Update avatar or name if provided and verify week reset
+			if req.Name != "" && user.Name == "" {
 				user.Name = req.Name
 			}
-			if req.AvatarURL != "" {
+			if req.AvatarURL != "" && user.AvatarURL == "" {
 				user.AvatarURL = req.AvatarURL
 			}
-			if req.GoogleID != "" {
-				user.GoogleID = req.GoogleID
+			if user.CurrentWeekKey != currentWeek {
+				user.CurrentWeekKey = currentWeek
+				user.WeeklyPoints = 0
 			}
 			db.Save(&user)
 		}
 
 		return c.JSON(fiber.Map{
 			"success": true,
-			"data":    user,
+			"user":    user,
 		})
 	})
 
@@ -190,7 +202,7 @@ func main() {
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to update profile"})
 		}
 
-		// Sync username/avatar ke submissions lampau agar seragam
+		// Update historical submissions to reflect new name/avatar
 		db.Model(&QuizSlotSubmission{}).Where("user_id = ?", user.ID).Updates(map[string]interface{}{
 			"user_name":  user.Name,
 			"avatar_url": user.AvatarURL,
@@ -213,6 +225,14 @@ func main() {
 			return c.Status(404).JSON(fiber.Map{"error": "User not found"})
 		}
 
+		// Check weekly reset
+		currentWeek := getISOWeekKey(time.Now())
+		if user.CurrentWeekKey != currentWeek {
+			user.CurrentWeekKey = currentWeek
+			user.WeeklyPoints = 0
+			db.Save(&user)
+		}
+
 		multiplier := 1.0
 		if user.Streak >= 7 {
 			multiplier = 1.5
@@ -227,7 +247,7 @@ func main() {
 		})
 	})
 
-	// 3. Current Live 30-Minute Slot Query & Snapshot Persistence
+	// 4. Current Live 30-Minute Slot Query & Snapshot Persistence
 	api.Get("/live-slot", func(c *fiber.Ctx) error {
 		userEmail := c.Query("email")
 		now := time.Now()
@@ -255,12 +275,6 @@ func main() {
 		randomIndex := int(seedBytes[3]) % len(countOptions)
 		targetCount := countOptions[randomIndex]
 
-		// Komposisi Seimbang: Campuran soal dari setiap tingkatan (SD, SMP, SMA)
-		var sdQuestions, smpQuestions, smaQuestions []Question
-		db.Where("level = ?", "SD").Order("id ASC").Find(&sdQuestions)
-		db.Where("level = ?", "SMP").Order("id ASC").Find(&smpQuestions)
-		db.Where("level = ?", "SMA").Order("id ASC").Find(&smaQuestions)
-
 		// Komposisi Soal: 40% SD, 40% SMP, 20% SMA
 		var countSD, countSMP, countSMA int
 		if targetCount == 10 {
@@ -270,6 +284,11 @@ func main() {
 		} else {
 			countSD, countSMP, countSMA = 8, 8, 4 // 40% SD, 40% SMP, 20% SMA
 		}
+
+		var sdQuestions, smpQuestions, smaQuestions []Question
+		db.Where("level = ?", "SD").Order("id ASC").Find(&sdQuestions)
+		db.Where("level = ?", "SMP").Order("id ASC").Find(&smpQuestions)
+		db.Where("level = ?", "SMA").Order("id ASC").Find(&smaQuestions)
 
 		var slotQuestions []Question
 		var questionIDs []uint
@@ -302,42 +321,45 @@ func main() {
 		pickQuestions(smpQuestions, countSMP, seedBytes[1])
 		pickQuestions(smaQuestions, countSMA, seedBytes[2])
 
-		// Interleave / Shuffle gabungan seluruh mata pelajaran (SD, SMP, SMA) agar urutan mata pelajaran bervariasi acak
+		// Acak final urutan seluruh soal antar-tingkat agar tidak mengelompok SD dulu
 		for i := len(slotQuestions) - 1; i > 0; i-- {
-			j := int(seedBytes[(i*3)%len(seedBytes)]) % (i + 1)
+			j := int(seedBytes[(i*7)%len(seedBytes)]) % (i + 1)
 			slotQuestions[i], slotQuestions[j] = slotQuestions[j], slotQuestions[i]
 		}
 
-		// Save/Ensure QuizSession Snapshot di Database
-		var session QuizSession
-		if err := db.Where("slot_id = ?", slotID).First(&session).Error; err != nil {
-			qIDsBytes, _ := json.Marshal(questionIDs)
-			qPayloadBytes, _ := json.Marshal(slotQuestions)
-			session = QuizSession{
+		// Snapshot Persistence: Simpan snapshot sesi ke DB jika belum ada
+		var sessionRecord QuizSession
+		if err := db.Where("slot_id = ?", slotID).First(&sessionRecord).Error; err != nil {
+			qIDsJSON, _ := json.Marshal(questionIDs)
+			payloadJSON, _ := json.Marshal(slotQuestions)
+			sessionRecord = QuizSession{
 				SlotID:           slotID,
 				SlotStart:        slotStartTime,
 				SlotEnd:          slotEndTime,
 				CategoryID:       activeCategory.ID,
-				CategoryTitle:    activeCategory.Title,
+				CategoryTitle:    "Kuis Terpadu (SD · SMP · SMA)",
 				QuestionCount:    len(slotQuestions),
-				QuestionIDs:      string(qIDsBytes),
-				QuestionsPayload: string(qPayloadBytes),
+				QuestionIDs:      string(qIDsJSON),
+				QuestionsPayload: string(payloadJSON),
 			}
-			db.Create(&session)
+			db.Create(&sessionRecord)
 		}
 
-		// Hitung Partisipan yang sudah submit di sesi ini
-		var participants []QuizSlotSubmission
-		db.Where("slot_id = ?", slotID).Order("score DESC, created_at ASC").Find(&participants)
-
+		// Cek apakah user yang sedang login sudah pernah submit di slot ini
+		userSubmitted := false
 		var userSubmission QuizSlotSubmission
-		isCompleted := false
 		if userEmail != "" {
-			err := db.Where("slot_id = ? AND user_email = ?", slotID, userEmail).First(&userSubmission).Error
-			if err == nil {
-				isCompleted = true
+			var u User
+			if err := db.Where("email = ?", userEmail).First(&u).Error; err == nil {
+				if err := db.Where("slot_id = ? AND user_id = ?", slotID, u.ID).First(&userSubmission).Error; err == nil {
+					userSubmitted = true
+				}
 			}
 		}
+
+		// Total partisipan di slot ini
+		var participantCount int64
+		db.Model(&QuizSlotSubmission{}).Where("slot_id = ?", slotID).Count(&participantCount)
 
 		return c.JSON(fiber.Map{
 			"success":           true,
@@ -347,33 +369,31 @@ func main() {
 			"seconds_remaining": secondsRemaining,
 			"category":          activeCategory,
 			"questions":         slotQuestions,
-			"question_count":    len(slotQuestions),
-			"is_completed":      isCompleted,
-			"submission":        userSubmission,
-			"participants_count": len(participants),
-			"participants":      participants,
+			"user_submitted":    userSubmitted,
+			"user_submission":   userSubmission,
+			"participants":      participantCount,
 		})
 	})
 
-	// 4. Session History List Endpoint (Menampilkan daftar semua sesi lampau beserta soal & partisipannya)
+	// 5. Riwayat Seluruh Sesi Lampau & Detail Peserta
 	api.Get("/sessions/history", func(c *fiber.Ctx) error {
 		var sessions []QuizSession
 		db.Order("slot_id DESC").Limit(20).Find(&sessions)
 
-		type SessionHistoryItem struct {
-			Session           QuizSession          `json:"session"`
-			ParticipantsCount int64                `json:"participants_count"`
-			Participants      []QuizSlotSubmission `json:"participants"`
+		type SessionWithSubmissions struct {
+			Session      QuizSession          `json:"session"`
+			Submissions  []QuizSlotSubmission `json:"submissions"`
+			Participants int                  `json:"participants"`
 		}
 
-		var result []SessionHistoryItem
+		var result []SessionWithSubmissions
 		for _, s := range sessions {
 			var subs []QuizSlotSubmission
-			db.Where("slot_id = ?", s.SlotID).Order("score DESC").Find(&subs)
-			result = append(result, SessionHistoryItem{
-				Session:           s,
-				ParticipantsCount: int64(len(subs)),
-				Participants:      subs,
+			db.Where("slot_id = ?", s.SlotID).Order("score DESC, time_spent_sec ASC").Find(&subs)
+			result = append(result, SessionWithSubmissions{
+				Session:      s,
+				Submissions:  subs,
+				Participants: len(subs),
 			})
 		}
 
@@ -383,7 +403,7 @@ func main() {
 		})
 	})
 
-	// 5. Practice Mode Endpoint (Random 10 Questions, No Points)
+	// 6. Practice Mode Endpoint (Random 10 Questions, No Points)
 	api.Get("/practice-questions", func(c *fiber.Ctx) error {
 		var questions []Question
 		db.Order("RANDOM()").Limit(10).Find(&questions)
@@ -399,7 +419,7 @@ func main() {
 		})
 	})
 
-	// 6. Submit Live Slot (With Streak Multiplier & Analytics Breakdown)
+	// 7. Submit Live Slot (With Streak Multiplier, Weekly Season & Analytics Breakdown)
 	api.Post("/live-slot/submit", func(c *fiber.Ctx) error {
 		var req struct {
 			SlotID       int64  `json:"slot_id"`
@@ -446,6 +466,13 @@ func main() {
 		}
 		user.LastActiveDate = todayStr
 
+		// Weekly Season Key Check
+		currentWeek := getISOWeekKey(time.Now())
+		if user.CurrentWeekKey != currentWeek {
+			user.CurrentWeekKey = currentWeek
+			user.WeeklyPoints = 0
+		}
+
 		// Multiplier calculation
 		multiplier := 1.0
 		if user.Streak >= 7 {
@@ -472,6 +499,7 @@ func main() {
 		}
 
 		user.Points += finalScoreAwarded
+		user.WeeklyPoints += finalScoreAwarded
 		user.QuizzesCompleted += 1
 		user.SdCorrect += req.SdCorrect
 		user.SdTotal += req.SdTotal
@@ -484,6 +512,7 @@ func main() {
 		return c.JSON(fiber.Map{
 			"success":           true,
 			"points":            user.Points,
+			"weekly_points":     user.WeeklyPoints,
 			"score_awarded":     finalScoreAwarded,
 			"streak_multiplier": multiplier,
 			"streak":            user.Streak,
@@ -492,11 +521,26 @@ func main() {
 		})
 	})
 
-	// 7. Global Leaderboard
+	// 8. Leaderboard (Dua Tab: Musim Mingguan & Sepanjang Masa)
 	api.Get("/leaderboard", func(c *fiber.Ctx) error {
+		mode := c.Query("mode", "weekly") // "weekly" atau "alltime"
 		var users []User
-		db.Order("points DESC, quizzes_completed DESC, updated_at ASC").Limit(25).Find(&users)
-		return c.JSON(fiber.Map{"success": true, "data": users})
+		
+		if mode == "alltime" {
+			db.Order("points DESC, quizzes_completed DESC, updated_at ASC").Limit(25).Find(&users)
+		} else {
+			currentWeek := getISOWeekKey(time.Now())
+			db.Where("current_week_key = ?", currentWeek).
+				Order("weekly_points DESC, quizzes_completed DESC, updated_at ASC").
+				Limit(25).
+				Find(&users)
+		}
+		return c.JSON(fiber.Map{
+			"success": true, 
+			"mode":    mode, 
+			"week":    getISOWeekKey(time.Now()),
+			"data":    users,
+		})
 	})
 
 	// Static Web Frontend Serving
