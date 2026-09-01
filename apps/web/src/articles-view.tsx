@@ -108,7 +108,7 @@ export function ArticlesView() {
           </div>
 
           {/* Book Content Typography */}
-          <div className="text-neutral-800 dark:text-neutral-200 leading-relaxed space-y-5 text-[15px] sm:text-base">
+          <div className="text-neutral-800 dark:text-neutral-200 leading-relaxed space-y-5 text-[15px] sm:text-base break-words overflow-hidden">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
@@ -122,7 +122,7 @@ export function ArticlesView() {
                   <h4 className="text-base sm:text-lg font-bold text-neutral-950 dark:text-white mt-6 mb-2 tracking-tight" {...props} />
                 ),
                 p: ({ ...props }) => (
-                  <p className="text-sm sm:text-[15px] leading-relaxed text-neutral-700 dark:text-neutral-300 my-3.5 text-justify sm:text-left" {...props} />
+                  <p className="text-sm sm:text-[15px] leading-relaxed text-neutral-700 dark:text-neutral-300 my-3.5 text-left" {...props} />
                 ),
                 ul: ({ ...props }) => (
                   <ul className="list-disc pl-5 my-3.5 space-y-2 text-sm sm:text-[15px] text-neutral-700 dark:text-neutral-300" {...props} />
@@ -139,8 +139,32 @@ export function ArticlesView() {
                 blockquote: ({ ...props }) => (
                   <blockquote className="border-l-2 border-indigo-500 pl-4 py-2 italic my-4 text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/50 rounded-r-2xl text-sm" {...props} />
                 ),
-                code: ({ ...props }) => (
-                  <code className="px-1.5 py-0.5 rounded-md font-mono text-xs bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-black/[0.04] dark:border-white/[0.06]" {...props} />
+                code: ({ className, children, ...props }) => {
+                  const isBlock = !className && String(children).includes('\n')
+                  if (isBlock) {
+                    return (
+                      <pre className="p-3 sm:p-4 rounded-2xl bg-neutral-950 dark:bg-black text-neutral-100 font-mono text-[11px] sm:text-xs overflow-x-auto my-4 border border-white/10 leading-snug">
+                        <code>{children}</code>
+                      </pre>
+                    )
+                  }
+                  return (
+                    <code className="px-1.5 py-0.5 rounded-md font-mono text-xs bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-black/[0.04] dark:border-white/[0.06] break-all" {...props}>
+                      {children}
+                    </code>
+                  )
+                },
+                pre: ({ children }) => <>{children}</>,
+                table: ({ ...props }) => (
+                  <div className="w-full overflow-x-auto my-4 rounded-2xl border border-black/[0.06] dark:border-white/[0.08]">
+                    <table className="w-full text-xs sm:text-sm text-left border-collapse" {...props} />
+                  </div>
+                ),
+                th: ({ ...props }) => (
+                  <th className="p-3 bg-neutral-100/70 dark:bg-neutral-900/70 font-bold border-b border-black/[0.06] dark:border-white/[0.08]" {...props} />
+                ),
+                td: ({ ...props }) => (
+                  <td className="p-3 border-b border-black/[0.04] dark:border-white/[0.04]" {...props} />
                 ),
               }}
             >
