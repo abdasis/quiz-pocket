@@ -62,7 +62,7 @@ export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
       if (window.google?.accounts?.id) {
         setIsSdkLoaded(true)
         window.google.accounts.id.initialize({
-          client_id: '940601303-runcntjqat1j56ghqlip78eejl4pdakm.apps.googleusercontent.com',
+          client_id: '188996269809-l276mh1sbhtikbo9kvvprs9r80bul633.apps.googleusercontent.com',
           callback: handleCredentialResponse,
           auto_select: false,
         })
