@@ -955,10 +955,10 @@ func main() {
 		})
 	})
 
-	// 12. Daftar Artikel Wawasan
+	// 12. Daftar Artikel Wawasan (Terbaru selalu di atas)
 	api.Get("/articles", func(c *fiber.Ctx) error {
 		var articles []Article
-		if err := db.Order("id ASC").Find(&articles).Error; err != nil {
+		if err := db.Order("id DESC").Find(&articles).Error; err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
 		return c.JSON(fiber.Map{
