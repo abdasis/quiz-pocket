@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { AppHeader } from './app-header'
+import { AppHeader, type AuthUser } from './app-header'
 import { QuizPlayer, type Question } from './quiz-player'
-import { BookOpen, Code, Server, Cpu, Shuffle, Sparkles, ChevronRight, Trophy } from 'lucide-react'
+import { LoginModal } from './login-modal'
+import { BookOpen, Code, Server, Cpu, Shuffle, Sparkles, ChevronRight, Trophy, LogIn } from 'lucide-react'
 
 interface Category {
   id: number
@@ -26,12 +27,19 @@ export function App() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   })
 
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    const saved = localStorage.getItem('quiz_pocket_user')
+    return saved ? JSON.parse(saved) : null
+  })
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false)
+  const [pendingCategory, setPendingCategory] = useState<Category | null>(null)
+
   const [categories, setCategories] = useState<Category[]>([])
   const [activeCategory, setActiveCategory] = useState<Category | null>(null)
   const [questions, setQuestions] = useState<Question[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [streak, setStreak] = useState(() => {
-    return parseInt(localStorage.getItem('quiz_pocket_streak') || '3', 10)
+    return parseInt(localStorage.getItem('quiz_pocket_streak') || '1', 10)
   })
 
   useEffect(() => {
@@ -55,7 +63,27 @@ export function App() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
   }
 
-  const handleStartCategory = async (cat: Category) => {
+  const handleLoginSuccess = (loggedInUser: AuthUser) => {
+    setUser(loggedInUser)
+    localStorage.setItem('quiz_pocket_user', JSON.stringify(loggedInUser))
+    if (pendingCategory) {
+      if (pendingCategory.id === 0) {
+        startRandomQuizInternal()
+      } else {
+        startCategoryInternal(pendingCategory)
+      }
+      setPendingCategory(null)
+    }
+  }
+
+  const handleLogout = () => {
+    setUser(null)
+    localStorage.removeItem('quiz_pocket_user')
+    setActiveCategory(null)
+    setQuestions([])
+  }
+
+  const startCategoryInternal = async (cat: Category) => {
     setIsLoading(true)
     try {
       const res = await fetch(`/api/v1/quiz/${cat.slug}`)
@@ -71,7 +99,16 @@ export function App() {
     }
   }
 
-  const handleStartRandomQuiz = async () => {
+  const handleStartCategory = (cat: Category) => {
+    if (!user) {
+      setPendingCategory(cat)
+      setIsLoginModalOpen(true)
+      return
+    }
+    startCategoryInternal(cat)
+  }
+
+  const startRandomQuizInternal = async () => {
     setIsLoading(true)
     try {
       const res = await fetch('/api/v1/quiz-random?limit=10')
@@ -94,18 +131,35 @@ export function App() {
     }
   }
 
+  const handleStartRandomQuiz = () => {
+    if (!user) {
+      setPendingCategory({
+        id: 0,
+        slug: 'random',
+        title: 'Kuis Acak Campuran',
+        description: '10 Soal acak gabungan seluruh kategori materi',
+        icon: 'Cpu',
+        question_count: 10,
+      })
+      setIsLoginModalOpen(true)
+      return
+    }
+    startRandomQuizInternal()
+  }
+
   const handleFinishQuiz = (score: number, total: number) => {
-    // Save streak
     const newStreak = streak + 1
     setStreak(newStreak)
     localStorage.setItem('quiz_pocket_streak', newStreak.toString())
 
-    // Submit result to backend
-    if (activeCategory) {
+    if (activeCategory && user) {
       fetch('/api/v1/quiz/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          user_id: user.id,
+          user_email: user.email,
+          user_name: user.name,
           category_id: activeCategory.id,
           score,
           total,
@@ -129,6 +183,9 @@ export function App() {
         onHomeClick={handleExitQuiz}
         currentTitle={activeCategory?.title}
         streak={streak}
+        user={user}
+        onOpenLogin={() => setIsLoginModalOpen(true)}
+        onLogout={handleLogout}
       />
 
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
@@ -146,16 +203,18 @@ export function App() {
               <div className="relative z-10 max-w-xl space-y-3">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-semibold border border-white/15">
                   <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                  Tantangan Harian Tersedia
+                  Tantangan Harian & Leaderboard
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
                   Uji Pengetahuan & Kecepatan Berpikir
                 </h2>
                 <p className="text-sm text-indigo-100/90 leading-relaxed">
-                  Pilih topik favorit mulai dari Keislaman, Web Development, Golang hingga Logika Komputasi.
+                  {user
+                    ? `Selamat datang, ${user.name || user.email}! Pilih topik untuk mulai uji kemampuan.`
+                    : 'Masuk dengan Gmail untuk mencatat riwayat skor, leaderboard dan streak harian.'}
                 </p>
 
-                <div className="pt-2">
+                <div className="pt-2 flex flex-wrap items-center gap-3">
                   <button
                     onClick={handleStartRandomQuiz}
                     disabled={isLoading}
@@ -164,6 +223,16 @@ export function App() {
                     <Shuffle className="w-4 h-4 text-indigo-600" />
                     Main Kuis Acak (10 Soal)
                   </button>
+
+                  {!user && (
+                    <button
+                      onClick={() => setIsLoginModalOpen(true)}
+                      className="h-11 px-5 rounded-2xl bg-white/15 hover:bg-white/20 text-white font-semibold text-sm border border-white/20 flex items-center gap-2 cursor-pointer pressable"
+                    >
+                      <LogIn className="w-4 h-4" />
+                      Masuk dengan Gmail
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -216,6 +285,16 @@ export function App() {
           </div>
         )}
       </main>
+
+      {/* Login Modal */}
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => {
+          setIsLoginModalOpen(false)
+          setPendingCategory(null)
+        }}
+        onLoginSuccess={handleLoginSuccess}
+      />
 
       {/* Minimal Footer */}
       <footer className="w-full border-t border-black/[0.06] dark:border-white/[0.08] py-6 text-center text-xs text-neutral-500 transition-colors">

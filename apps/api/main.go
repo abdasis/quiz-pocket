@@ -15,14 +15,24 @@ import (
 	"gorm.io/gorm"
 )
 
+type User struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Email     string    `gorm:"uniqueIndex;not null" json:"email"`
+	Name      string    `json:"name"`
+	AvatarURL string    `json:"avatar_url"`
+	GoogleID  string    `gorm:"index" json:"google_id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type Category struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Slug        string    `gorm:"uniqueIndex;not null" json:"slug"`
-	Title       string    `gorm:"not null" json:"title"`
-	Description string    `json:"description"`
-	Icon        string    `json:"icon"`
-	QuestionCount int     `json:"question_count"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	Slug          string    `gorm:"uniqueIndex;not null" json:"slug"`
+	Title         string    `gorm:"not null" json:"title"`
+	Description   string    `json:"description"`
+	Icon          string    `json:"icon"`
+	QuestionCount int       `json:"question_count"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type Question struct {
@@ -30,17 +40,20 @@ type Question struct {
 	CategoryID  uint      `gorm:"index;not null" json:"category_id"`
 	Category    Category  `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
 	Question    string    `gorm:"not null" json:"question"`
-	Options     string    `gorm:"type:text;not null" json:"-"` // JSON string array of choices
+	Options     string    `gorm:"type:text;not null" json:"-"`
 	OptionsList []string  `gorm:"-" json:"options"`
-	AnswerIndex int       `json:"answer_index"` // 0-based correct index
+	AnswerIndex int       `json:"answer_index"`
 	Explanation string    `json:"explanation"`
-	Difficulty  string    `json:"difficulty"` // easy, medium, hard
+	Difficulty  string    `json:"difficulty"`
 	Points      int       `json:"points"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
 type QuizResult struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
+	UserID       uint      `gorm:"index" json:"user_id"`
+	UserEmail    string    `json:"user_email"`
+	UserName     string    `json:"user_name"`
 	CategoryID   uint      `json:"category_id"`
 	Score        int       `json:"score"`
 	Total        int       `json:"total"`
@@ -57,11 +70,10 @@ func main() {
 	}
 
 	// Auto-migrate
-	if err := db.AutoMigrate(&Category{}, &Question{}, &QuizResult{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Category{}, &Question{}, &QuizResult{}); err != nil {
 		log.Fatalf("Auto-migration failed: %v", err)
 	}
 
-	// Seed default categories and questions if empty
 	var catCount int64
 	db.Model(&Category{}).Count(&catCount)
 	if catCount == 0 {
@@ -79,16 +91,59 @@ func main() {
 	}))
 	app.Use(logger.New())
 
-	// API Routes
 	api := app.Group("/api/v1")
 
-	// 1. Categories
+	// 1. Google / Email Auth Login & Profile Sync
+	api.Post("/auth/google-login", func(c *fiber.Ctx) error {
+		var req struct {
+			Email     string `json:"email"`
+			Name      string `json:"name"`
+			AvatarURL string `json:"avatar_url"`
+			GoogleID  string `json:"google_id"`
+		}
+		if err := c.BodyParser(&req); err != nil || req.Email == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "Email is required"})
+		}
+
+		var user User
+		err := db.Where("email = ?", req.Email).First(&user).Error
+		if err != nil {
+			// Create new user
+			user = User{
+				Email:     req.Email,
+				Name:      req.Name,
+				AvatarURL: req.AvatarURL,
+				GoogleID:  req.GoogleID,
+			}
+			if err := db.Create(&user).Error; err != nil {
+				return c.Status(500).JSON(fiber.Map{"error": "Failed to create user"})
+			}
+		} else {
+			// Update existing user info
+			if req.Name != "" {
+				user.Name = req.Name
+			}
+			if req.AvatarURL != "" {
+				user.AvatarURL = req.AvatarURL
+			}
+			if req.GoogleID != "" {
+				user.GoogleID = req.GoogleID
+			}
+			db.Save(&user)
+		}
+
+		return c.JSON(fiber.Map{
+			"success": true,
+			"data":    user,
+		})
+	})
+
+	// 2. Categories
 	api.Get("/categories", func(c *fiber.Ctx) error {
 		var cats []Category
 		if err := db.Find(&cats).Error; err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
-		// Update question count dynamically
 		for i := range cats {
 			var count int64
 			db.Model(&Question{}).Where("category_id = ?", cats[i].ID).Count(&count)
@@ -97,7 +152,7 @@ func main() {
 		return c.JSON(fiber.Map{"success": true, "data": cats})
 	})
 
-	// 2. Questions by Category
+	// 3. Questions by Category
 	api.Get("/quiz/:slug", func(c *fiber.Ctx) error {
 		slug := c.Params("slug")
 		var cat Category
@@ -124,20 +179,26 @@ func main() {
 		})
 	})
 
-	// 3. Submit Quiz Result
+	// 4. Submit Quiz Result
 	api.Post("/quiz/submit", func(c *fiber.Ctx) error {
 		var req struct {
-			CategoryID   uint `json:"category_id"`
-			Score        int  `json:"score"`
-			Total        int  `json:"total"`
-			CorrectCount int  `json:"correct_count"`
-			TimeSpentSec int  `json:"time_spent_sec"`
+			UserID       uint   `json:"user_id"`
+			UserEmail    string `json:"user_email"`
+			UserName     string `json:"user_name"`
+			CategoryID   uint   `json:"category_id"`
+			Score        int    `json:"score"`
+			Total        int    `json:"total"`
+			CorrectCount int    `json:"correct_count"`
+			TimeSpentSec int    `json:"time_spent_sec"`
 		}
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 		}
 
 		res := QuizResult{
+			UserID:       req.UserID,
+			UserEmail:    req.UserEmail,
+			UserName:     req.UserName,
 			CategoryID:   req.CategoryID,
 			Score:        req.Score,
 			Total:        req.Total,
@@ -151,7 +212,7 @@ func main() {
 		return c.JSON(fiber.Map{"success": true, "data": res})
 	})
 
-	// 4. Random Quiz (Campuran)
+	// 5. Random Quiz (Campuran)
 	api.Get("/quiz-random", func(c *fiber.Ctx) error {
 		limit, _ := strconv.Atoi(c.Query("limit", "10"))
 		if limit <= 0 || limit > 50 {
@@ -177,7 +238,14 @@ func main() {
 		})
 	})
 
-	// 5. Health Check
+	// 6. Leaderboard / History
+	api.Get("/leaderboard", func(c *fiber.Ctx) error {
+		var results []QuizResult
+		db.Order("score DESC, created_at DESC").Limit(20).Find(&results)
+		return c.JSON(fiber.Map{"success": true, "data": results})
+	})
+
+	// 7. Health Check
 	api.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok", "app": "Quiz Pocket API", "timestamp": time.Now()})
 	})
@@ -208,7 +276,6 @@ func seedDatabase(db *gorm.DB) {
 		db.Create(&c)
 	}
 
-	// Fetch created categories
 	var catIslam, catWeb, catGo, catLogic Category
 	db.Where("slug = ?", "islamic-basic").First(&catIslam)
 	db.Where("slug = ?", "web-dev").First(&catWeb)
@@ -216,7 +283,6 @@ func seedDatabase(db *gorm.DB) {
 	db.Where("slug = ?", "general-logic").First(&catLogic)
 
 	questions := []Question{
-		// Islam
 		{
 			CategoryID:  catIslam.ID,
 			Question:    "Berapa jumlah rukun iman dalam ajaran Islam?",
@@ -253,7 +319,6 @@ func seedDatabase(db *gorm.DB) {
 			Difficulty:  "medium",
 			Points:      10,
 		},
-		// Web Dev
 		{
 			CategoryID:  catWeb.ID,
 			Question:    "Di CSS modern, unit viewport apa yang otomatis menyesuaikan tinggi layar smartphone saat browser toolbar/address bar muncul dan hilang?",
@@ -281,7 +346,6 @@ func seedDatabase(db *gorm.DB) {
 			Difficulty:  "easy",
 			Points:      10,
 		},
-		// Golang
 		{
 			CategoryID:  catGo.ID,
 			Question:    "Bagaimana cara membaca context deadline atau pembatalan di dalam perulangan goroutine di Go?",
@@ -300,7 +364,6 @@ func seedDatabase(db *gorm.DB) {
 			Difficulty:  "easy",
 			Points:      10,
 		},
-		// Logic
 		{
 			CategoryID:  catLogic.ID,
 			Question:    "Lanjutkan pola bilangan berikut: 2, 6, 12, 20, 30, ...?",
