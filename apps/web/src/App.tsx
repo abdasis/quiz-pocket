@@ -141,12 +141,31 @@ export function App() {
     fetchLiveSlot()
     fetchLeaderboard(leaderboardTab)
 
+    // Check initial path for SEO articles mode
+    const path = window.location.pathname
+    if (path.startsWith('/buku-wawasan')) {
+      setIsArticlesMode(true)
+    }
+
+    const handlePopState = () => {
+      const p = window.location.pathname
+      if (p.startsWith('/buku-wawasan')) {
+        setIsArticlesMode(true)
+      } else {
+        setIsArticlesMode(false)
+      }
+    }
+    window.addEventListener('popstate', handlePopState)
+
     const interval = setInterval(() => {
       fetchLiveSlot()
       fetchLeaderboard(leaderboardTab)
     }, 15000)
 
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('popstate', handlePopState)
+    }
   }, [user?.email, leaderboardTab])
 
   // Countdown Timer
@@ -224,6 +243,8 @@ export function App() {
         onHomeClick={() => {
           setIsPlaying(false)
           setIsPracticeMode(false)
+          setIsArticlesMode(false)
+          window.history.pushState({}, '', '/')
         }}
         onOpenLogin={() => setIsLoginModalOpen(true)}
         onOpenProfileModal={() => setIsStatsModalOpen(true)}
@@ -394,7 +415,10 @@ export function App() {
 
                     <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                       <button
-                        onClick={() => setIsArticlesMode(true)}
+                        onClick={() => {
+                          setIsArticlesMode(true)
+                          window.history.pushState({}, '', '/buku-wawasan')
+                        }}
                         className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-2 pressable shadow-xs"
                       >
                         <BookOpen className="w-4 h-4" />
@@ -437,7 +461,10 @@ export function App() {
                     </button>
 
                     <button
-                      onClick={() => setIsArticlesMode(true)}
+                      onClick={() => {
+                        setIsArticlesMode(true)
+                        window.history.pushState({}, '', '/buku-wawasan')
+                      }}
                       className="px-5 py-3.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border border-emerald-200/50 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-300 font-bold text-sm transition-all flex items-center justify-center gap-2 pressable"
                     >
                       <BookOpen className="w-4 h-4" />

@@ -23,6 +23,20 @@ export function ArticlesView() {
 
   useEffect(() => {
     fetchArticles()
+    // Handle URL Deep-linking / SEO Clean Routing (/buku-wawasan/:slug atau /buku-wawasan)
+    const checkUrlRoute = () => {
+      const path = window.location.pathname
+      if (path.startsWith('/buku-wawasan/')) {
+        const slug = path.replace('/buku-wawasan/', '')
+        if (slug) handleOpenArticle(slug, false)
+      } else if (path === '/buku-wawasan') {
+        setSelectedArticle(null)
+      }
+    }
+    checkUrlRoute()
+
+    window.addEventListener('popstate', checkUrlRoute)
+    return () => window.removeEventListener('popstate', checkUrlRoute)
   }, [])
 
   const fetchArticles = async () => {
@@ -40,19 +54,28 @@ export function ArticlesView() {
     }
   }
 
-  const handleOpenArticle = async (slug: string) => {
+  const handleOpenArticle = async (slug: string, updateHistory = true) => {
     setIsLoading(true)
     try {
       const res = await fetch(`/api/v1/articles/${slug}`)
       const json = await res.json()
       if (json.success && json.article) {
         setSelectedArticle(json.article)
+        if (updateHistory) {
+          window.history.pushState({ slug }, '', `/buku-wawasan/${slug}`)
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' })
       }
     } catch (e) {
       console.error('Failed to fetch article detail:', e)
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleBackToList = () => {
+    setSelectedArticle(null)
+    window.history.pushState({}, '', '/buku-wawasan')
   }
 
   const currentIndex = selectedArticle 
@@ -68,12 +91,12 @@ export function ArticlesView() {
 
   if (selectedArticle) {
     return (
-      <div className="space-y-6 animate-in fade-in duration-200 max-w-3xl mx-auto">
+      <div className="space-y-6 animate-in fade-in duration-200 w-full">
         {/* Top Book Navigation Header */}
         <div className="flex items-center justify-between pb-2 border-b border-black/[0.04] dark:border-white/[0.04]">
           <button
-            onClick={() => setSelectedArticle(null)}
-            className="pressable inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl border border-black/[0.06] dark:border-white/[0.08] bg-white/70 dark:bg-neutral-900/70 text-xs font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+            onClick={handleBackToList}
+            className="pressable inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl border border-black/[0.06] dark:border-white/[0.08] bg-white/70 dark:bg-neutral-900/70 text-xs font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition cursor-pointer"
           >
             <ChevronLeft className="w-4 h-4" />
             Daftar Bab & Buku
@@ -99,9 +122,9 @@ export function ArticlesView() {
               <Bookmark className="w-3.5 h-3.5 text-indigo-500" />
               {selectedArticle.category} · Bab {currentIndex + 1}
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-950 dark:text-white leading-tight">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-950 dark:text-white leading-tight">
               {selectedArticle.title}
-            </h1>
+            </h2>
             <p className="text-sm sm:text-base text-neutral-600 dark:text-neutral-400 italic leading-relaxed pt-1">
               "{selectedArticle.summary}"
             </p>
