@@ -211,7 +211,12 @@ function MainScreen() {
     }
   }
 
-  // Handle Start Live Quiz - Strict Auth Check
+  // Anti-Cheat: App State Detection in Mobile (Tab Switch / Background)
+  const handleMobileViolation = () => {
+    if (!isPlaying || isFinished) return
+    setScore((s) => Math.max(0, s - 15))
+    Alert.alert('Pelanggaran Terdeteksi', 'Meninggalkan aplikasi saat ujian kuis berlangsung dikenakan penalti -15 poin!')
+  }
   const handleStartLiveQuiz = () => {
     if (!user) {
       setIsAuthModalOpen(true)

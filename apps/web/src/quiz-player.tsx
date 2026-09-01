@@ -230,10 +230,15 @@ export function QuizPlayer({
       if (document.hidden && !isCompletedRef.current && !isDisqualified) {
         setTabSwitches((prev) => {
           const nextCount = prev + 1
+          // Penalti pengurangan poin tiap kali tab switch (-15 poin)
+          setScore((s) => Math.max(0, s - 15))
+          setCombo(0)
+          
           if (nextCount >= 3) {
             setIsDisqualified(true)
+            setScore(0)
           } else {
-            setShowWarning(`Peringatan: Berpindah jendela/tab terdeteksi (${nextCount}/3). Timer tetap berjalan secara server-sync!`)
+            setShowWarning(`Pelanggaran: Berpindah jendela/tab terdeteksi (${nextCount}/3). Penalti -15 Poin & combo di-reset!`)
           }
           return nextCount
         })
