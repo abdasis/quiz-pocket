@@ -997,9 +997,44 @@ func main() {
 	// Static Downloads Serving (Direct APK Downloads)
 	app.Static("/downloads", "/home/abdasis/Projects/quiz-pocket/apps/web/dist/downloads")
 
+	// Dynamic SEO Sitemap XML Endpoint
+	app.Get("/sitemap.xml", func(c *fiber.Ctx) error {
+		var articles []Article
+		db.Order("id DESC").Find(&articles)
+
+		xml := `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://quiz.abdasis.my.id/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://quiz.abdasis.my.id/buku-wawasan</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>`
+
+		for _, a := range articles {
+			lastmod := a.UpdatedAt.Format("2006-01-02")
+			xml += fmt.Sprintf(`
+  <url>
+    <loc>https://quiz.abdasis.my.id/buku-wawasan/%s</loc>
+    <lastmod>%s</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>`, a.Slug, lastmod)
+		}
+
+		xml += "\n</urlset>"
+		c.Set("Content-Type", "application/xml; charset=utf-8")
+		return c.SendString(xml)
+	})
+
 	// Static Web Frontend & Assets Serving
 	app.Static("/assets", "/home/abdasis/Projects/quiz-pocket/apps/web/dist/assets")
 	app.Static("/article-images", "/home/abdasis/Projects/quiz-pocket/apps/web/dist/article-images")
+	app.Static("/robots.txt", "/home/abdasis/Projects/quiz-pocket/apps/web/dist/robots.txt")
 	app.Get("/*", func(c *fiber.Ctx) error {
 		path := c.Path()
 		if len(path) >= 4 && path[:4] == "/api" {

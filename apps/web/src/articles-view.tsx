@@ -87,6 +87,60 @@ export function ArticlesView() {
   const prevArticle = currentIndex > 0 ? articles[currentIndex - 1] : null
   const nextArticle = currentIndex >= 0 && currentIndex < articles.length - 1 ? articles[currentIndex + 1] : null
 
+  // Sync SEO Dynamic Document Title and Structured Meta Tags
+  useEffect(() => {
+    if (selectedArticle) {
+      document.title = `${selectedArticle.title} - Buku Wawasan Quiz Pocket`
+      
+      // Update meta description
+      let metaDesc = document.querySelector('meta[name="description"]')
+      if (!metaDesc) {
+        metaDesc = document.createElement('meta')
+        metaDesc.setAttribute('name', 'description')
+        document.head.appendChild(metaDesc)
+      }
+      metaDesc.setAttribute('content', selectedArticle.summary || selectedArticle.title)
+
+      // Inject / Update JSON-LD Schema.org Article
+      let scriptTag = document.getElementById('json-ld-article') as HTMLScriptElement | null
+      if (!scriptTag) {
+        scriptTag = document.createElement('script')
+        scriptTag.id = 'json-ld-article'
+        scriptTag.type = 'application/ld+json'
+        document.head.appendChild(scriptTag)
+      }
+      
+      const schemaData = {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": selectedArticle.title,
+        "description": selectedArticle.summary,
+        "inLanguage": "id-ID",
+        "author": {
+          "@type": "Organization",
+          "name": "Quiz Pocket Pustaka Wawasan",
+          "url": "https://quiz.abdasis.my.id"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "Quiz Pocket",
+          "url": "https://quiz.abdasis.my.id"
+        },
+        "mainEntityOfPage": {
+          "@type": "WebPage",
+          "@id": `https://quiz.abdasis.my.id/buku-wawasan/${selectedArticle.slug}`
+        },
+        "articleSection": selectedArticle.category,
+        "educationalLevel": selectedArticle.level
+      }
+      scriptTag.text = JSON.stringify(schemaData)
+    } else {
+      document.title = 'Buku Wawasan Digital - Quiz Pocket'
+      const existingScript = document.getElementById('json-ld-article')
+      if (existingScript) existingScript.remove()
+    }
+  }, [selectedArticle])
+
   const filteredArticles = selectedLevel === 'ALL' 
     ? articles 
     : articles.filter(a => a.level === selectedLevel)

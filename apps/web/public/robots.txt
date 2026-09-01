@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Allow: /buku-wawasan
+Allow: /buku-wawasan/*
+Allow: /article-images/*
+
+Sitemap: https://quiz.abdasis.my.id/sitemap.xml
