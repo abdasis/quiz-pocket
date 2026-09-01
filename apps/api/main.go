@@ -124,6 +124,29 @@ type DuelMatch struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
+// Helper untuk mengambil dan mengacak bank soal secara deterministik tanpa pengulangan (Full-Cycle Permutation)
+func getLevelPermutation(totalQuestions int, slotID int64, seedOffset byte) []int {
+	if totalQuestions == 0 {
+		return []int{}
+	}
+	perm := make([]int, totalQuestions)
+	for i := 0; i < totalQuestions; i++ {
+		perm[i] = i
+	}
+	// Siklus permutasi unik tiap putaran bank soal
+	cycle := slotID / int64(totalQuestions)
+	h := sha256.New()
+	binary.Write(h, binary.BigEndian, cycle)
+	h.Write([]byte{seedOffset})
+	cycleSeed := h.Sum(nil)
+
+	for i := totalQuestions - 1; i > 0; i-- {
+		j := int(cycleSeed[(int(seedOffset)+i)%len(cycleSeed)]) % (i + 1)
+		perm[i], perm[j] = perm[j], perm[i]
+	}
+	return perm
+}
+
 // Helper untuk mengambil soal dari sesi aktif 30 menit
 func getLiveSlotQuestions(db *gorm.DB) []Question {
 	const slotDurationSec int64 = 1800
@@ -164,18 +187,18 @@ func getLiveSlotQuestions(db *gorm.DB) []Question {
 
 	var slotQuestions []Question
 
-	pickQuestions := func(list []Question, count int, seedOffset byte) {
-		if len(list) == 0 {
+	pickWithoutRepeat := func(list []Question, count int, seedOffset byte) {
+		n := len(list)
+		if n == 0 {
 			return
 		}
-		shuffled := make([]Question, len(list))
-		copy(shuffled, list)
-		for i := len(shuffled) - 1; i > 0; i-- {
-			j := int(seedBytes[(int(seedOffset)+i)%len(seedBytes)]) % (i + 1)
-			shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
-		}
-		for i := 0; i < count && i < len(shuffled); i++ {
-			q := shuffled[i]
+		perm := getLevelPermutation(n, slotID, seedOffset)
+		startIdx := int((slotID * int64(count)) % int64(n))
+
+		for i := 0; i < count; i++ {
+			idx := (startIdx + i) % n
+			q := list[perm[idx]]
+
 			var opts []string
 			if err := json.Unmarshal([]byte(q.Options), &opts); err == nil {
 				q.OptionsList = opts
@@ -190,9 +213,9 @@ func getLiveSlotQuestions(db *gorm.DB) []Question {
 		}
 	}
 
-	pickQuestions(sdQuestions, countSD, seedBytes[0])
-	pickQuestions(smpQuestions, countSMP, seedBytes[1])
-	pickQuestions(smaQuestions, countSMA, seedBytes[2])
+	pickWithoutRepeat(sdQuestions, countSD, seedBytes[0])
+	pickWithoutRepeat(smpQuestions, countSMP, seedBytes[1])
+	pickWithoutRepeat(smaQuestions, countSMA, seedBytes[2])
 
 	for i := len(slotQuestions) - 1; i > 0; i-- {
 		j := int(seedBytes[(i*7)%len(seedBytes)]) % (i + 1)
@@ -402,21 +425,18 @@ func main() {
 		var slotQuestions []Question
 		var questionIDs []uint
 
-		pickQuestions := func(list []Question, count int, seedOffset byte) {
-			if len(list) == 0 {
+		pickWithoutRepeat := func(list []Question, count int, seedOffset byte) {
+			n := len(list)
+			if n == 0 {
 				return
 			}
-			// Fisher-Yates shuffle deterministik berdasarkan hash slot
-			shuffled := make([]Question, len(list))
-			copy(shuffled, list)
-			
-			for i := len(shuffled) - 1; i > 0; i-- {
-				j := int(seedBytes[(int(seedOffset)+i)%len(seedBytes)]) % (i + 1)
-				shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
-			}
+			perm := getLevelPermutation(n, slotID, seedOffset)
+			startIdx := int((slotID * int64(count)) % int64(n))
 
-			for i := 0; i < count && i < len(shuffled); i++ {
-				q := shuffled[i]
+			for i := 0; i < count; i++ {
+				idx := (startIdx + i) % n
+				q := list[perm[idx]]
+
 				var opts []string
 				if err := json.Unmarshal([]byte(q.Options), &opts); err == nil {
 					q.OptionsList = opts
@@ -432,9 +452,9 @@ func main() {
 			}
 		}
 
-		pickQuestions(sdQuestions, countSD, seedBytes[0])
-		pickQuestions(smpQuestions, countSMP, seedBytes[1])
-		pickQuestions(smaQuestions, countSMA, seedBytes[2])
+		pickWithoutRepeat(sdQuestions, countSD, seedBytes[0])
+		pickWithoutRepeat(smpQuestions, countSMP, seedBytes[1])
+		pickWithoutRepeat(smaQuestions, countSMA, seedBytes[2])
 
 		// Acak final urutan seluruh soal antar-tingkat agar tidak mengelompok SD dulu
 		for i := len(slotQuestions) - 1; i > 0; i-- {
