@@ -214,7 +214,7 @@ export function App() {
         theme={theme}
         onToggleTheme={handleToggleTheme}
         onHomeClick={() => setIsPlaying(false)}
-        currentTitle={isPlaying ? liveSlot?.category.title : undefined}
+        currentTitle={isPlaying ? 'Kuis Terpadu (SD · SMP · SMA)' : undefined}
         user={user}
         onOpenLogin={() => setIsLoginModalOpen(true)}
         onLogout={handleLogout}
@@ -224,7 +224,7 @@ export function App() {
         {isPlaying && liveSlot && liveSlot.questions?.length > 0 ? (
           <QuizPlayer
             slotId={liveSlot.slot_id}
-            categoryTitle={liveSlot.category.title}
+            categoryTitle="Kuis Terpadu (SD · SMP · SMA)"
             questions={liveSlot.questions}
             secondsRemainingSlot={secondsRemaining}
             onFinish={handleFinishLiveQuiz}
@@ -270,10 +270,10 @@ export function App() {
                     <div className="flex items-center gap-2">
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-semibold border border-indigo-200/60 dark:border-indigo-800/40">
                         <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                        <span>Sesi Aktif ({liveSlot.category.level})</span>
+                        <span>Sesi Live Multi-Jenjang</span>
                       </span>
                       <span className="inline-flex items-center px-2.5 py-1 rounded-xl bg-neutral-100 dark:bg-neutral-800/60 text-neutral-600 dark:text-neutral-300 text-xs font-medium border border-black/[0.04] dark:border-white/[0.06]">
-                        {totalQuestions} Butir Soal Acak
+                        {totalQuestions} Butir Soal (SD · SMP · SMA)
                       </span>
                     </div>
 
@@ -286,10 +286,10 @@ export function App() {
                   {/* Main Subject & Description */}
                   <div className="space-y-2 max-w-2xl">
                     <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-900 dark:text-white">
-                      {liveSlot.category.title}
+                      Kuis Terpadu Wawasan Nyata & Sains
                     </h3>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                      {liveSlot.category.description}. Poin dihitung dinamis bertingkat (SD +10, SMP +20, SMA +30) dan diakumulasikan ke papan peringkat global.
+                      Kombinasi soal pilihan tingkat SD, SMP, dan SMA. Poin dihitung bertingkat (SD +10, SMP +20, SMA +30) dan diakumulasikan ke papan peringkat global.
                     </p>
                   </div>
 
