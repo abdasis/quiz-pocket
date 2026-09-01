@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowRight, RotateCcw, Award, Clock, Sparkles, Check, X, ArrowLeft, ShieldAlert, AlertTriangle } from 'lucide-react'
+import { ArrowRight, RotateCcw, Award, Clock, Sparkles, Check, X, ArrowLeft, ShieldAlert, AlertTriangle, Share2, Copy, CheckCheck } from 'lucide-react'
 import confetti from 'canvas-confetti'
 
 export interface Question {
@@ -18,13 +18,27 @@ interface QuizPlayerProps {
   categoryTitle: string
   questions: Question[]
   secondsRemainingSlot: number
-  onFinish: (score: number, total: number, correctCount: number) => void
+  isPracticeMode?: boolean
+  streak?: number
+  onFinish: (
+    score: number, 
+    total: number, 
+    correctCount: number,
+    sdCorrect: number,
+    sdTotal: number,
+    smpCorrect: number,
+    smpTotal: number,
+    smaCorrect: number,
+    smaTotal: number
+  ) => void
   onExit: () => void
 }
 
 export function QuizPlayer({
   categoryTitle,
   questions,
+  isPracticeMode = false,
+  streak = 1,
   onFinish,
   onExit,
 }: QuizPlayerProps) {
@@ -36,18 +50,26 @@ export function QuizPlayer({
   const [secondsLeft, setSecondsLeft] = useState(30)
   const [isCompleted, setIsCompleted] = useState(false)
 
+  // Level breakdowns
+  const [sdStats, setSdStats] = useState({ correct: 0, total: 0 })
+  const [smpStats, setSmpStats] = useState({ correct: 0, total: 0 })
+  const [smaStats, setSmaStats] = useState({ correct: 0, total: 0 })
+
   // Anti-Cheat States
   const [tabSwitches, setTabSwitches] = useState(0)
   const [showWarning, setShowWarning] = useState<string | null>(null)
   const [isDisqualified, setIsDisqualified] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
   const isCompletedRef = useRef(false)
   isCompletedRef.current = isCompleted
 
   const currentQ = questions[currentIndex]
   const progressPercent = Math.round(((currentIndex + 1) / questions.length) * 100)
 
-  // 1. Anti-Cheat: Visibility Change & Blur Detection (Tab Switch / Window Switch)
+  // 1. Anti-Cheat: Visibility Change & Blur Detection (Only in Live Exam)
   useEffect(() => {
+    if (isPracticeMode) return
+
     const handleVisibilityChange = () => {
       if (document.hidden && !isCompletedRef.current && !isDisqualified) {
         setTabSwitches((prev) => {
@@ -76,7 +98,6 @@ export function QuizPlayer({
       }
     }
 
-    // 2. Anti-Cheat: Disable Context Menu (Right Click) & Copy Key Combinations
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault()
       setShowWarning('Tindakan klik kanan / inspect dinonaktifkan demi integritas ujian.')
@@ -106,7 +127,7 @@ export function QuizPlayer({
       window.removeEventListener('contextmenu', handleContextMenu)
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isDisqualified])
+  }, [isDisqualified, isPracticeMode])
 
   // Countdown timer per question
   useEffect(() => {
@@ -135,7 +156,18 @@ export function QuizPlayer({
     setSelectedOption(idx)
     setIsAnswered(true)
 
-    if (idx === currentQ.answer_index) {
+    const isCorrect = idx === currentQ.answer_index
+    const level = currentQ.level || 'SD'
+
+    if (level === 'SD') {
+      setSdStats((prev) => ({ correct: prev.correct + (isCorrect ? 1 : 0), total: prev.total + 1 }))
+    } else if (level === 'SMP') {
+      setSmpStats((prev) => ({ correct: prev.correct + (isCorrect ? 1 : 0), total: prev.total + 1 }))
+    } else if (level === 'SMA') {
+      setSmaStats((prev) => ({ correct: prev.correct + (isCorrect ? 1 : 0), total: prev.total + 1 }))
+    }
+
+    if (isCorrect) {
       setScore((prev) => prev + (currentQ.points || 10))
       setCorrectCount((prev) => prev + 1)
     }
@@ -155,7 +187,17 @@ export function QuizPlayer({
         origin: { y: 0.6 },
       })
       const maxPoints = questions.reduce((acc, q) => acc + (q.points || 10), 0)
-      onFinish(score, maxPoints, correctCount)
+      onFinish(
+        score, 
+        maxPoints, 
+        correctCount,
+        sdStats.correct,
+        sdStats.total,
+        smpStats.correct,
+        smpStats.total,
+        smaStats.correct,
+        smaStats.total
+      )
     }
   }
 
@@ -170,6 +212,21 @@ export function QuizPlayer({
     setIsDisqualified(false)
     setTabSwitches(0)
     setShowWarning(null)
+    setSdStats({ correct: 0, total: 0 })
+    setSmpStats({ correct: 0, total: 0 })
+    setSmaStats({ correct: 0, total: 0 })
+  }
+
+  const handleShareWhatsApp = (accuracy: number) => {
+    const text = `🎯 Saya baru saja menyelesaikan Kuis Wawasan Real-Life di Quiz Pocket!\n\nSkor: +${score} Poin (${correctCount}/${questions.length} Benar)\nAkurasi: ${accuracy}%\nStreak: ${streak} Hari 🔥\n\nYuk ikutan asah logika & sains di: https://quiz.abdasis.my.id`
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank')
+  }
+
+  const handleCopyShare = (accuracy: number) => {
+    const text = `🎯 Saya baru saja menyelesaikan Kuis Wawasan Real-Life di Quiz Pocket!\n\nSkor: +${score} Poin (${correctCount}/${questions.length} Benar)\nAkurasi: ${accuracy}%\nStreak: ${streak} Hari 🔥\n\nYuk ikutan asah logika & sains di: https://quiz.abdasis.my.id`
+    navigator.clipboard.writeText(text)
+    setCopiedLink(true)
+    setTimeout(() => setCopiedLink(false), 2000)
   }
 
   // State: Disqualified
@@ -186,7 +243,7 @@ export function QuizPlayer({
               Sesi Didiskualifikasi
             </h2>
             <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              Terdeteksi berpindah jendela/tab lebih dari batas yang diperbolehkan demi menjaga integritas dan kejujuran kuis. Poin sesi ini tidak dihitung.
+              Terdeteksi berpindah jendela/tab lebih dari batas yang diperbolehkan demi menjaga integritas kuis. Poin sesi ini tidak dihitung.
             </p>
           </div>
 
@@ -206,45 +263,69 @@ export function QuizPlayer({
 
   if (isCompleted) {
     const accuracy = Math.round((correctCount / questions.length) * 100)
-    const maxScorePossible = questions.reduce((acc, q) => acc + (q.points || 10), 0)
 
     return (
       <div className="w-full max-w-4xl mx-auto py-2 sm:py-6 animate-in fade-in zoom-in-95 duration-200">
         <div className="bg-white dark:bg-[#111114] rounded-3xl border border-black/[0.06] dark:border-white/[0.08] p-6 sm:p-10 text-center space-y-8">
+          {/* Top Trophy */}
           <div className="w-20 h-20 mx-auto rounded-3xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800/40 flex items-center justify-center text-amber-500">
             <Award className="w-10 h-10" />
           </div>
 
           <div className="space-y-2 max-w-md mx-auto">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
-              Sesi Kuis Selesai!
+              {isPracticeMode ? 'Latihan Selesai!' : 'Sesi Kuis Selesai!'}
             </h2>
             <p className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed font-normal">
-              Hasil dan akumulasi poin kamu telah berhasil dicatat ke sistem dan papan peringkat global secara valid.
+              {isPracticeMode
+                ? 'Bagus sekali! Kamu telah melatih logika dan ingatanmu sambil menunggu rotasi kuis utama.'
+                : 'Hasil dan akumulasi poin kamu telah berhasil dicatat ke sistem dan leaderboard secara valid.'}
             </p>
           </div>
 
-          {/* Comprehensive Apple Stats Inset Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto">
-            <div className="p-5 rounded-2xl bg-neutral-50/80 dark:bg-neutral-900/50 border border-black/[0.04] dark:border-white/[0.06] text-left">
-              <span className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">Poin Terkumpul</span>
-              <p className="text-2xl sm:text-3xl font-extrabold font-mono text-indigo-600 dark:text-indigo-400 mt-1">
-                +{score} <span className="text-xs font-normal text-neutral-400">/ {maxScorePossible}</span>
-              </p>
+          {/* Shareable Receipt Ticket Card */}
+          <div className="max-w-md mx-auto p-6 rounded-3xl bg-[#f8fafc] dark:bg-[#151519] border border-black/[0.08] dark:border-white/[0.08] text-left space-y-5 shadow-xs">
+            <div className="flex items-center justify-between border-b border-black/[0.06] dark:border-white/[0.06] pb-3">
+              <div>
+                <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider">Tiket Hasil Ujian</span>
+                <p className="text-xs font-bold text-neutral-900 dark:text-white">Quiz Pocket Real-Life Exam</p>
+              </div>
+              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                LULUS
+              </span>
             </div>
 
-            <div className="p-5 rounded-2xl bg-neutral-50/80 dark:bg-neutral-900/50 border border-black/[0.04] dark:border-white/[0.06] text-left">
-              <span className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">Jawaban Benar</span>
-              <p className="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-600 dark:text-emerald-400 mt-1">
-                {correctCount} <span className="text-xs font-normal text-neutral-400">/ {questions.length}</span>
-              </p>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <span className="text-[10px] text-neutral-400">Poin</span>
+                <p className="text-lg font-bold font-mono text-indigo-600 dark:text-indigo-400">+{score}</p>
+              </div>
+              <div>
+                <span className="text-[10px] text-neutral-400">Benar</span>
+                <p className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">{correctCount}/{questions.length}</p>
+              </div>
+              <div>
+                <span className="text-[10px] text-neutral-400">Akurasi</span>
+                <p className="text-lg font-bold font-mono text-neutral-900 dark:text-white">{accuracy}%</p>
+              </div>
             </div>
 
-            <div className="p-5 rounded-2xl bg-neutral-50/80 dark:bg-neutral-900/50 border border-black/[0.04] dark:border-white/[0.06] text-left">
-              <span className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">Tingkat Akurasi</span>
-              <p className="text-2xl sm:text-3xl font-extrabold font-mono text-neutral-900 dark:text-white mt-1">
-                {accuracy}%
-              </p>
+            {/* Share CTA Actions */}
+            <div className="pt-2 flex items-center gap-2">
+              <button
+                onClick={() => handleShareWhatsApp(accuracy)}
+                className="flex-1 h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer pressable"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span>Bagikan ke WA</span>
+              </button>
+              <button
+                onClick={() => handleCopyShare(accuracy)}
+                className="h-10 px-3 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] hover:bg-black/[0.08] text-neutral-800 dark:text-neutral-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer pressable border border-black/[0.06] dark:border-white/[0.08]"
+              >
+                {copiedLink ? <CheckCheck className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedLink ? 'Tersalin' : 'Salin'}</span>
+              </button>
             </div>
           </div>
 
@@ -313,7 +394,7 @@ export function QuizPlayer({
 
           {/* Right Metrics: Anti-Cheat Tab Status + Tier Badge + Question Countdown */}
           <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
-            {tabSwitches > 0 && (
+            {tabSwitches > 0 && !isPracticeMode && (
               <span className="px-2.5 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-xs font-semibold border border-amber-200/60 dark:border-amber-800/40 flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3 text-amber-500" />
                 <span>Pelanggaran: {tabSwitches}/3</span>

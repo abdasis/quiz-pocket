@@ -1,0 +1,152 @@
+import { X, Flame, BookOpen, Compass, GraduationCap, Award } from 'lucide-react'
+import type { AuthUser } from './app-header'
+
+interface StatsModalProps {
+  isOpen: boolean
+  onClose: () => void
+  user: AuthUser | null
+}
+
+export function StatsModal({ isOpen, onClose, user }: StatsModalProps) {
+  if (!isOpen || !user) return null
+
+  const sdTotal = user.sd_total || 0
+  const sdCorrect = user.sd_correct || 0
+  const sdAccuracy = sdTotal > 0 ? Math.round((sdCorrect / sdTotal) * 100) : 0
+
+  const smpTotal = user.smp_total || 0
+  const smpCorrect = user.smp_correct || 0
+  const smpAccuracy = smpTotal > 0 ? Math.round((smpCorrect / smpTotal) * 100) : 0
+
+  const smaTotal = user.sma_total || 0
+  const smaCorrect = user.sma_correct || 0
+  const smaAccuracy = smaTotal > 0 ? Math.round((smaCorrect / smaTotal) * 100) : 0
+
+  const totalAnswered = sdTotal + smpTotal + smaTotal
+  const totalCorrect = sdCorrect + smpCorrect + smaCorrect
+  const overallAccuracy = totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0
+
+  const streakMultiplier = (user.streak || 1) >= 7 ? '1.5x' : (user.streak || 1) >= 3 ? '1.2x' : '1.0x'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-lg bg-white dark:bg-[#111114] rounded-3xl border border-black/[0.08] dark:border-white/[0.1] shadow-2xl p-6 sm:p-8 space-y-6 animate-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200/60 dark:border-indigo-800/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+              <Award className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-neutral-950 dark:text-white">Rapor Wawasan & Statistik</h3>
+              <p className="text-xs text-neutral-500 font-medium">Evaluasi nalar berdasarkan jenjang pendidikan</p>
+            </div>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] flex items-center justify-center text-neutral-500 cursor-pointer pressable"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* User Summary Top Card */}
+        <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-black/[0.04] dark:border-white/[0.04] flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
+              {user.avatar_url ? (
+                <img src={user.avatar_url} alt={user.name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-xs font-bold text-neutral-500">
+                  {user.name ? user.name[0].toUpperCase() : 'U'}
+                </div>
+              )}
+            </div>
+            <div>
+              <p className="text-sm font-bold text-neutral-900 dark:text-white">{user.name}</p>
+              <p className="text-xs text-neutral-400 font-mono">{user.points || 0} Total Poin</p>
+            </div>
+          </div>
+
+          <div className="text-right">
+            <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs font-bold font-mono border border-amber-200/60 dark:border-amber-800/40">
+              <Flame className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+              <span>{user.streak || 1} Hari ({streakMultiplier})</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 3 Tiers Performance Breakdown */}
+        <div className="space-y-3">
+          <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider font-mono">
+            Akurasi per Tingkatan
+          </h4>
+
+          {/* SD Tier */}
+          <div className="p-4 rounded-2xl bg-white dark:bg-[#151518] border border-black/[0.06] dark:border-white/[0.08] space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-neutral-900 dark:text-white flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5 text-emerald-500" />
+                Tingkat SD (Sains & Alam)
+              </span>
+              <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                {sdAccuracy}% ({sdCorrect}/{sdTotal})
+              </span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                style={{ width: `${sdAccuracy}%` }}
+              />
+            </div>
+          </div>
+
+          {/* SMP Tier */}
+          <div className="p-4 rounded-2xl bg-white dark:bg-[#151518] border border-black/[0.06] dark:border-white/[0.08] space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-neutral-900 dark:text-white flex items-center gap-1.5">
+                <Compass className="w-3.5 h-3.5 text-blue-500" />
+                Tingkat SMP (Geografi & Fisika)
+              </span>
+              <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
+                {smpAccuracy}% ({smpCorrect}/{smpTotal})
+              </span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                style={{ width: `${smpAccuracy}%` }}
+              />
+            </div>
+          </div>
+
+          {/* SMA Tier */}
+          <div className="p-4 rounded-2xl bg-white dark:bg-[#151518] border border-black/[0.06] dark:border-white/[0.08] space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-neutral-900 dark:text-white flex items-center gap-1.5">
+                <GraduationCap className="w-3.5 h-3.5 text-purple-500" />
+                Tingkat SMA (Logika & Finansial)
+              </span>
+              <span className="font-mono font-bold text-purple-600 dark:text-purple-400">
+                {smaAccuracy}% ({smaCorrect}/{smaTotal})
+              </span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
+              <div
+                className="h-full bg-purple-500 rounded-full transition-all duration-500"
+                style={{ width: `${smaAccuracy}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Footer info */}
+        <div className="pt-2 flex items-center justify-between text-xs text-neutral-400 font-mono">
+          <span>{user.quizzes_completed || 0} Sesi Selesai</span>
+          <span>Akurasi Global: {overallAccuracy}%</span>
+        </div>
+      </div>
+    </div>
+  )
+}

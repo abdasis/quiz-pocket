@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Trophy, Flame, Moon, Sun, ArrowLeft, LogIn, LogOut, Award } from 'lucide-react'
+import { Trophy, Flame, Moon, Sun, ArrowLeft, LogIn, LogOut, Award, BarChart2 } from 'lucide-react'
 
 export interface AuthUser {
   id: number
@@ -9,14 +9,21 @@ export interface AuthUser {
   points?: number
   streak?: number
   quizzes_completed?: number
+  last_active_date?: string
+  sd_correct?: number
+  sd_total?: number
+  smp_correct?: number
+  smp_total?: number
+  sma_correct?: number
+  sma_total?: number
 }
 
 interface AppHeaderProps {
   theme: 'light' | 'dark'
   onToggleTheme: () => void
   onHomeClick: () => void
+  onOpenProfileModal?: () => void
   currentTitle?: string
-  streak?: number
   user: AuthUser | null
   onOpenLogin: () => void
   onLogout: () => void
@@ -26,6 +33,7 @@ export function AppHeader({
   theme,
   onToggleTheme,
   onHomeClick,
+  onOpenProfileModal,
   currentTitle,
   user,
   onOpenLogin,
@@ -34,7 +42,7 @@ export function AppHeader({
   const [showUserMenu, setShowUserMenu] = useState(false)
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-white/80 dark:bg-[#090a0f]/80 backdrop-blur-2xl border-b border-black/[0.06] dark:border-white/[0.08] transition-colors">
+    <header className="sticky top-0 z-50 w-full bg-white/80 dark:bg-[#000000]/80 backdrop-blur-2xl border-b border-black/[0.06] dark:border-white/[0.08] transition-colors">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         {/* Brand Logo & Back Action */}
         <div className="flex items-center gap-3">
@@ -51,13 +59,13 @@ export function AppHeader({
               onClick={onHomeClick}
               className="flex items-center gap-2.5 cursor-pointer text-left pressable"
             >
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-sm">
+              <div className="w-10 h-10 rounded-2xl bg-neutral-950 dark:bg-white flex items-center justify-center text-white dark:text-neutral-950 shadow-xs">
                 <Trophy className="w-5 h-5" />
               </div>
               <div>
                 <h1 className="text-base font-bold text-neutral-900 dark:text-white leading-tight flex items-center gap-1.5">
                   Quiz Pocket
-                  <span className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60">
+                  <span className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60">
                     Live
                   </span>
                 </h1>
@@ -69,7 +77,7 @@ export function AppHeader({
           {currentTitle && (
             <div className="truncate max-w-[180px] sm:max-w-xs">
               <h2 className="text-sm font-bold text-neutral-900 dark:text-white truncate">{currentTitle}</h2>
-              <p className="text-[11px] text-neutral-500">Sesi 30 Menit Sedang Berjalan</p>
+              <p className="text-[11px] text-neutral-500">Sesi Sedang Berjalan</p>
             </div>
           )}
         </div>
@@ -84,10 +92,19 @@ export function AppHeader({
             </div>
           )}
 
-          {/* Streak Counter */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/40 text-amber-900 dark:text-amber-300">
+          {/* Streak Counter with Bonus Multiplier Indicator */}
+          <div 
+            onClick={onOpenProfileModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/40 text-amber-900 dark:text-amber-300 cursor-pointer pressable"
+            title="Daily Streak (Klik untuk lihat statistik)"
+          >
             <Flame className="w-4 h-4 text-amber-500 fill-amber-500" />
-            <span className="text-xs font-bold font-mono">{user?.streak || 1}</span>
+            <span className="text-xs font-bold font-mono">{user?.streak || 1} Hari</span>
+            {user && (user.streak || 1) >= 3 && (
+              <span className="text-[9px] font-extrabold px-1 rounded bg-amber-500 text-white font-mono">
+                {(user.streak || 1) >= 7 ? '1.5x' : '1.2x'}
+              </span>
+            )}
           </div>
 
           {/* Theme Switcher Button */}
@@ -122,26 +139,34 @@ export function AppHeader({
                 </span>
               </button>
 
-              {/* User Dropdown Menu */}
+              {/* Dropdown Menu */}
               {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-56 p-2 rounded-2xl bg-white dark:bg-[#12131a] border border-black/[0.08] dark:border-white/[0.1] shadow-xl z-50 animate-in fade-in zoom-in-95 duration-150">
-                  <div className="p-2 border-b border-black/[0.06] dark:border-white/[0.08]">
-                    <p className="text-xs font-bold text-neutral-900 dark:text-white truncate">{user.name || 'User'}</p>
-                    <p className="text-[11px] text-neutral-500 truncate">{user.email}</p>
-                    <div className="mt-1.5 flex items-center justify-between text-[10px] text-neutral-500">
-                      <span>Total Poin:</span>
-                      <b className="text-indigo-600 dark:text-indigo-400 font-mono">{user.points || 0}</b>
-                    </div>
+                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-[#141416] rounded-2xl border border-black/[0.08] dark:border-white/[0.08] shadow-lg py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-4 py-2 border-b border-black/[0.04] dark:border-white/[0.04]">
+                    <p className="text-xs font-bold text-neutral-900 dark:text-white truncate">{user.name}</p>
+                    <p className="text-[11px] text-neutral-400 truncate">{user.email}</p>
                   </div>
+
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false)
+                      if (onOpenProfileModal) onOpenProfileModal()
+                    }}
+                    className="w-full px-4 py-2 text-left text-xs font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-900/60 flex items-center gap-2 cursor-pointer"
+                  >
+                    <BarChart2 className="w-4 h-4 text-indigo-500" />
+                    <span>Rapor & Statistik Akun</span>
+                  </button>
+
                   <button
                     onClick={() => {
                       setShowUserMenu(false)
                       onLogout()
                     }}
-                    className="w-full mt-1 p-2 rounded-xl text-left text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-2 cursor-pointer pressable"
+                    className="w-full px-4 py-2 text-left text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2 cursor-pointer"
                   >
                     <LogOut className="w-4 h-4" />
-                    Keluar Akun
+                    <span>Keluar Akun</span>
                   </button>
                 </div>
               )}
@@ -149,10 +174,10 @@ export function AppHeader({
           ) : (
             <button
               onClick={onOpenLogin}
-              className="h-10 px-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer pressable shadow-xs"
+              className="h-10 px-3.5 sm:px-4 rounded-2xl bg-neutral-950 dark:bg-white text-white dark:text-neutral-950 hover:bg-neutral-800 dark:hover:bg-neutral-100 font-semibold text-xs flex items-center gap-2 cursor-pointer pressable"
             >
               <LogIn className="w-3.5 h-3.5" />
-              <span>Masuk</span>
+              <span>Masuk Gmail</span>
             </button>
           )}
         </div>
