@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"time"
@@ -774,25 +775,38 @@ func main() {
 			})
 		}
 
-		// Ambil soal persis dari sesi yang sedang aktif saat ini
-		sessionQuestions := getLiveSlotQuestions(db)
-		if len(sessionQuestions) == 0 {
-			// Fallback jika tidak ada sesi
-			var sdQuestions, smpQuestions, smaQuestions []Question
-			db.Where("level = ?", "SD").Order("RANDOM()").Limit(4).Find(&sdQuestions)
-			db.Where("level = ?", "SMP").Order("RANDOM()").Limit(4).Find(&smpQuestions)
-			db.Where("level = ?", "SMA").Order("RANDOM()").Limit(2).Find(&smaQuestions)
-			sessionQuestions = append(sdQuestions, smpQuestions...)
-			sessionQuestions = append(sessionQuestions, smaQuestions...)
-			for i := range sessionQuestions {
-				var opts []string
-				if err := json.Unmarshal([]byte(sessionQuestions[i].Options), &opts); err == nil {
-					sessionQuestions[i].OptionsList = opts
+		// Buat paket 10 soal duel fresh yang selalu unik & acak tiap matchmaking baru
+		// Komposisi proporsional: 4 SD (40%), 4 SMP (40%), 2 SMA (20%)
+		var sdPool, smpPool, smaPool []Question
+		db.Where("level = ?", "SD").Order("RANDOM()").Limit(4).Find(&sdPool)
+		db.Where("level = ?", "SMP").Order("RANDOM()").Limit(4).Find(&smpPool)
+		db.Where("level = ?", "SMA").Order("RANDOM()").Limit(2).Find(&smaPool)
+
+		duelQuestions := make([]Question, 0, 10)
+		duelQuestions = append(duelQuestions, sdPool...)
+		duelQuestions = append(duelQuestions, smpPool...)
+		duelQuestions = append(duelQuestions, smaPool...)
+
+		// Acak urutan tampil antar soal
+		rand.Seed(time.Now().UnixNano())
+		rand.Shuffle(len(duelQuestions), func(i, j int) {
+			duelQuestions[i], duelQuestions[j] = duelQuestions[j], duelQuestions[i]
+		})
+
+		for i := range duelQuestions {
+			var opts []string
+			if err := json.Unmarshal([]byte(duelQuestions[i].Options), &opts); err == nil {
+				duelQuestions[i].OptionsList = opts
+			}
+			if duelQuestions[i].OptionExplanations != "" {
+				var explList []string
+				if err := json.Unmarshal([]byte(duelQuestions[i].OptionExplanations), &explList); err == nil {
+					duelQuestions[i].OptionExplanationsList = explList
 				}
 			}
 		}
 
-		qBytes, _ := json.Marshal(sessionQuestions)
+		qBytes, _ := json.Marshal(duelQuestions)
 		matchCode := fmt.Sprintf("duel_%d_%d", time.Now().UnixNano(), user.ID)
 
 		newMatch := DuelMatch{
@@ -807,7 +821,7 @@ func main() {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
 
-		newMatch.Questions = sessionQuestions
+		newMatch.Questions = duelQuestions
 		return c.JSON(fiber.Map{
 			"success": true,
 			"matched": false,
