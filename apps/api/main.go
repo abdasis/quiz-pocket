@@ -997,8 +997,9 @@ func main() {
 	// Static Downloads Serving (Direct APK Downloads)
 	app.Static("/downloads", "/home/abdasis/Projects/quiz-pocket/apps/web/dist/downloads")
 
-	// Static Web Frontend Serving
+	// Static Web Frontend & Assets Serving
 	app.Static("/assets", "/home/abdasis/Projects/quiz-pocket/apps/web/dist/assets")
+	app.Static("/article-images", "/home/abdasis/Projects/quiz-pocket/apps/web/dist/article-images")
 	app.Get("/*", func(c *fiber.Ctx) error {
 		path := c.Path()
 		if len(path) >= 4 && path[:4] == "/api" {
