@@ -46,8 +46,9 @@ export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
           }),
         })
         const json = await res.json()
-        if (json.success) {
-          onLoginSuccess(json.data)
+        if (json.success && (json.user || json.data)) {
+          const authUser = json.user || json.data
+          onLoginSuccess(authUser)
           onClose()
         } else {
           setErrorMsg(json.error || 'Gagal autentikasi akun Google.')
