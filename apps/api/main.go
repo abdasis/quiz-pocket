@@ -122,6 +122,78 @@ type DuelMatch struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
+// Helper untuk mengambil soal dari sesi aktif 30 menit
+func getLiveSlotQuestions(db *gorm.DB) []Question {
+	const slotDurationSec int64 = 1800
+	currentUnix := time.Now().Unix()
+	slotID := currentUnix / slotDurationSec
+
+	// Cek jika snapshot sesi sudah tersimpan di database
+	var sessionRecord QuizSession
+	if err := db.Where("slot_id = ?", slotID).First(&sessionRecord).Error; err == nil && sessionRecord.QuestionsPayload != "" {
+		var questions []Question
+		if err := json.Unmarshal([]byte(sessionRecord.QuestionsPayload), &questions); err == nil && len(questions) > 0 {
+			return questions
+		}
+	}
+
+	// Generate deterministic jika belum ada record snapshot
+	h := sha256.New()
+	binary.Write(h, binary.BigEndian, slotID)
+	seedBytes := h.Sum(nil)
+
+	countOptions := []int{10, 15, 20}
+	randomIndex := int(seedBytes[3]) % len(countOptions)
+	targetCount := countOptions[randomIndex]
+
+	var countSD, countSMP, countSMA int
+	if targetCount == 10 {
+		countSD, countSMP, countSMA = 4, 4, 2
+	} else if targetCount == 15 {
+		countSD, countSMP, countSMA = 6, 6, 3
+	} else {
+		countSD, countSMP, countSMA = 8, 8, 4
+	}
+
+	var sdQuestions, smpQuestions, smaQuestions []Question
+	db.Where("level = ?", "SD").Order("id ASC").Find(&sdQuestions)
+	db.Where("level = ?", "SMP").Order("id ASC").Find(&smpQuestions)
+	db.Where("level = ?", "SMA").Order("id ASC").Find(&smaQuestions)
+
+	var slotQuestions []Question
+
+	pickQuestions := func(list []Question, count int, seedOffset byte) {
+		if len(list) == 0 {
+			return
+		}
+		shuffled := make([]Question, len(list))
+		copy(shuffled, list)
+		for i := len(shuffled) - 1; i > 0; i-- {
+			j := int(seedBytes[(int(seedOffset)+i)%len(seedBytes)]) % (i + 1)
+			shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+		}
+		for i := 0; i < count && i < len(shuffled); i++ {
+			q := shuffled[i]
+			var opts []string
+			if err := json.Unmarshal([]byte(q.Options), &opts); err == nil {
+				q.OptionsList = opts
+			}
+			slotQuestions = append(slotQuestions, q)
+		}
+	}
+
+	pickQuestions(sdQuestions, countSD, seedBytes[0])
+	pickQuestions(smpQuestions, countSMP, seedBytes[1])
+	pickQuestions(smaQuestions, countSMA, seedBytes[2])
+
+	for i := len(slotQuestions) - 1; i > 0; i-- {
+		j := int(seedBytes[(i*7)%len(seedBytes)]) % (i + 1)
+		slotQuestions[i], slotQuestions[j] = slotQuestions[j], slotQuestions[i]
+	}
+
+	return slotQuestions
+}
+
 func getISOWeekKey(t time.Time) string {
 	year, week := t.ISOWeek()
 	return fmt.Sprintf("%d-W%02d", year, week)
@@ -632,23 +704,25 @@ func main() {
 			})
 		}
 
-		// Buat room duel baru dengan 10 butir soal seimbang (4 SD, 4 SMP, 2 SMA)
-		var sdQuestions, smpQuestions, smaQuestions []Question
-		db.Where("level = ?", "SD").Order("RANDOM()").Limit(4).Find(&sdQuestions)
-		db.Where("level = ?", "SMP").Order("RANDOM()").Limit(4).Find(&smpQuestions)
-		db.Where("level = ?", "SMA").Order("RANDOM()").Limit(2).Find(&smaQuestions)
-
-		combined := append(sdQuestions, smpQuestions...)
-		combined = append(combined, smaQuestions...)
-
-		for i := range combined {
-			var opts []string
-			if err := json.Unmarshal([]byte(combined[i].Options), &opts); err == nil {
-				combined[i].OptionsList = opts
+		// Ambil soal persis dari sesi yang sedang aktif saat ini
+		sessionQuestions := getLiveSlotQuestions(db)
+		if len(sessionQuestions) == 0 {
+			// Fallback jika tidak ada sesi
+			var sdQuestions, smpQuestions, smaQuestions []Question
+			db.Where("level = ?", "SD").Order("RANDOM()").Limit(4).Find(&sdQuestions)
+			db.Where("level = ?", "SMP").Order("RANDOM()").Limit(4).Find(&smpQuestions)
+			db.Where("level = ?", "SMA").Order("RANDOM()").Limit(2).Find(&smaQuestions)
+			sessionQuestions = append(sdQuestions, smpQuestions...)
+			sessionQuestions = append(sessionQuestions, smaQuestions...)
+			for i := range sessionQuestions {
+				var opts []string
+				if err := json.Unmarshal([]byte(sessionQuestions[i].Options), &opts); err == nil {
+					sessionQuestions[i].OptionsList = opts
+				}
 			}
 		}
 
-		qBytes, _ := json.Marshal(combined)
+		qBytes, _ := json.Marshal(sessionQuestions)
 		matchCode := fmt.Sprintf("duel_%d_%d", time.Now().UnixNano(), user.ID)
 
 		newMatch := DuelMatch{
@@ -663,7 +737,7 @@ func main() {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
 
-		newMatch.Questions = combined
+		newMatch.Questions = sessionQuestions
 		return c.JSON(fiber.Map{
 			"success": true,
 			"matched": false,

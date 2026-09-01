@@ -270,7 +270,7 @@ export function DuelArena({
               Mencari Lawan Bertanding 1 vs 1...
             </h2>
             <p className="text-xs sm:text-sm text-neutral-500 leading-relaxed">
-              Sistem mencocokkan Anda dengan pemain lain secara adil untuk 10 butir soal wawasan terpadu berkecepatan tinggi.
+              Sistem mencocokkan Anda dengan pemain lain secara adil untuk paket soal sesi sinkron aktif berkecepatan tinggi.
             </p>
           </div>
 
@@ -308,7 +308,7 @@ export function DuelArena({
 
             <div className="text-center">
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-500 uppercase">
-                Soal {currentIndex + 1}/10
+                Soal {currentIndex + 1}/{questions.length || 10}
               </span>
             </div>
 
@@ -407,7 +407,7 @@ export function DuelArena({
               Menunggu Lawan Menyelesaikan Soal...
             </h2>
             <p className="text-xs text-neutral-500">
-              Anda telah menyelesaikan 10 butir soal dengan perolehan <span className="font-bold text-indigo-600">{score} Pts</span> ({correctCount} Benar). Hasil akhir akan dihitung secara instan.
+              Anda telah menyelesaikan seluruh soal dengan perolehan <span className="font-bold text-indigo-600">{score} Pts</span> ({correctCount} Benar). Hasil akhir akan dihitung secara instan.
             </p>
           </div>
         </div>
@@ -459,7 +459,7 @@ export function DuelArena({
             }`}>
               <span className="text-[10px] font-mono font-bold text-neutral-400 uppercase">Skor Anda</span>
               <p className="text-2xl sm:text-3xl font-bold font-mono text-neutral-900 dark:text-white">{score}</p>
-              <p className="text-[11px] text-neutral-500">{correctCount}/10 Benar</p>
+              <p className="text-[11px] text-neutral-500">{correctCount}/{questions.length || 10} Benar</p>
             </div>
 
             <div className={`p-4 rounded-2xl border text-center space-y-1 ${
@@ -467,7 +467,7 @@ export function DuelArena({
             }`}>
               <span className="text-[10px] font-mono font-bold text-neutral-400 uppercase">Skor Lawan</span>
               <p className="text-2xl sm:text-3xl font-bold font-mono text-neutral-900 dark:text-white">{opponentScore}</p>
-              <p className="text-[11px] text-neutral-500">{opponentCorrect}/10 Benar</p>
+              <p className="text-[11px] text-neutral-500">{opponentCorrect}/{questions.length || 10} Benar</p>
             </div>
           </div>
 
