@@ -351,35 +351,37 @@ export function QuizPlayer({
       </div>
 
       {/* Main Question & Option Workspace Card */}
-      <section className="bg-white dark:bg-[#111114] rounded-3xl border border-black/[0.06] dark:border-white/[0.08] p-6 sm:p-8 space-y-6">
+      <section className="bg-white dark:bg-[#111114] rounded-3xl border border-black/[0.06] dark:border-white/[0.08] p-6 sm:p-9 space-y-7">
         {/* Question Text Area */}
-        <div className="space-y-3">
-          <span className="text-[11px] font-mono font-medium text-neutral-400 uppercase tracking-wider">
-            Pertanyaan {currentIndex + 1}
-          </span>
-          <h2 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-neutral-950 dark:text-white leading-snug">
+        <div className="space-y-3.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-mono font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest px-2.5 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200/60 dark:border-indigo-800/40">
+              Pertanyaan {currentIndex + 1}
+            </span>
+          </div>
+          <h2 className="exam-question text-neutral-950 dark:text-neutral-50 leading-snug">
             {currentQ.question}
           </h2>
         </div>
 
         {/* Multiple Choice Grid */}
-        <div className="grid grid-cols-1 gap-3 pt-2">
+        <div className="grid grid-cols-1 gap-3 pt-1">
           {currentQ.options?.map((opt, idx) => {
             const isSelected = selectedOption === idx
             const isCorrect = idx === currentQ.answer_index
 
-            let stateStyle = 'border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#141417] text-neutral-800 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-900/60'
+            let stateStyle = 'border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#141417] text-neutral-800 dark:text-neutral-200 hover:bg-neutral-50/80 dark:hover:bg-neutral-900/60'
             let pillStyle = 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
 
             if (isAnswered) {
               if (isCorrect) {
-                stateStyle = 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-200'
-                pillStyle = 'bg-emerald-500 text-white'
+                stateStyle = 'border-emerald-500/80 bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-100'
+                pillStyle = 'bg-emerald-500 text-white shadow-xs'
               } else if (isSelected && !isCorrect) {
-                stateStyle = 'border-rose-500 bg-rose-50/70 dark:bg-rose-950/30 text-rose-950 dark:text-rose-200'
-                pillStyle = 'bg-rose-500 text-white'
+                stateStyle = 'border-rose-500/80 bg-rose-50/70 dark:bg-rose-950/30 text-rose-950 dark:text-rose-100'
+                pillStyle = 'bg-rose-500 text-white shadow-xs'
               } else {
-                stateStyle = 'border-black/[0.04] dark:border-white/[0.04] bg-neutral-50/40 dark:bg-neutral-900/20 text-neutral-400 opacity-50'
+                stateStyle = 'border-black/[0.04] dark:border-white/[0.04] bg-neutral-50/40 dark:bg-neutral-900/20 text-neutral-400 opacity-45'
                 pillStyle = 'bg-neutral-100 dark:bg-neutral-800 text-neutral-400'
               }
             }
@@ -389,13 +391,13 @@ export function QuizPlayer({
                 key={idx}
                 disabled={isAnswered || isDisqualified}
                 onClick={() => handleSelectOption(idx)}
-                className={`w-full min-h-[56px] p-4 sm:px-5 rounded-2xl border text-left font-medium text-sm sm:text-base flex items-center justify-between gap-3.5 cursor-pointer pressable transition-all ${stateStyle}`}
+                className={`w-full min-h-[58px] p-4 sm:px-5 rounded-2xl border text-left font-medium exam-option-text flex items-center justify-between gap-3.5 cursor-pointer pressable transition-all ${stateStyle}`}
               >
                 <div className="flex items-center gap-3.5 min-w-0">
                   <span className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-mono font-bold shrink-0 transition-colors ${pillStyle}`}>
                     {String.fromCharCode(65 + idx)}
                   </span>
-                  <span className="leading-snug">{opt}</span>
+                  <span className="leading-snug text-neutral-900 dark:text-neutral-100 font-medium">{opt}</span>
                 </div>
 
                 {isAnswered && (
@@ -424,7 +426,7 @@ export function QuizPlayer({
               <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
               <span>Penjelasan Jawaban & Logika:</span>
             </div>
-            <p className="text-xs sm:text-sm text-indigo-950/90 dark:text-indigo-200/90 leading-relaxed">
+            <p className="exam-explanation text-indigo-950/90 dark:text-indigo-200/90 leading-relaxed">
               {currentQ.explanation || 'Jawaban di atas sesuai dengan prinsip sains dan fakta wawasan umum resmi.'}
             </p>
           </div>
