@@ -379,11 +379,50 @@ export function DuelArena({
 
             {/* Explanation & Next */}
             {isAnswered && (
-              <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-[#18181c] border border-black/[0.04] dark:border-white/[0.04] space-y-3">
-                <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                  <span className="font-bold text-neutral-800 dark:text-neutral-200">💡 Penjelasan: </span>
-                  {currentQ.explanation}
+              <div className={`p-4 sm:p-5 rounded-2xl border space-y-3 ${
+                selectedOption === currentQ.answer_index
+                  ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200/60 dark:border-emerald-800/40'
+                  : 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200/60 dark:border-rose-800/40'
+              }`}>
+                {/* Status Indicator */}
+                <div className="flex items-center gap-2 pb-2 border-b border-black/[0.04] dark:border-white/[0.04]">
+                  {selectedOption === currentQ.answer_index ? (
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                      ✓ Jawaban Anda Benar (+{currentQ.points || 10} Pts)
+                    </span>
+                  ) : (
+                    <span className="text-xs font-bold text-rose-600 dark:text-rose-400">
+                      ✗ Jawaban Anda Kurang Tepat
+                    </span>
+                  )}
+                </div>
+
+                {/* Wrong answer comparison */}
+                {selectedOption !== currentQ.answer_index && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div className="p-2.5 rounded-xl bg-white/80 dark:bg-[#18181c] border border-rose-200/50 dark:border-rose-900/40">
+                      <span className="text-[10px] font-mono text-rose-500 font-bold block">Pilihan Anda:</span>
+                      <span className="font-semibold text-rose-700 dark:text-rose-300">
+                        {selectedOption !== null && selectedOption >= 0 && currentQ.options[selectedOption]
+                          ? `${String.fromCharCode(65 + selectedOption)}. ${currentQ.options[selectedOption]}`
+                          : 'Waktu Habis / Tidak Memilih'}
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-white/80 dark:bg-[#18181c] border border-emerald-200/50 dark:border-emerald-900/40">
+                      <span className="text-[10px] font-mono text-emerald-600 font-bold block">Jawaban Benar:</span>
+                      <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                        {String.fromCharCode(65 + currentQ.answer_index)}. {currentQ.options[currentQ.answer_index]}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed">
+                  <span className="font-bold text-neutral-900 dark:text-white">💡 Pembahasan: </span>
+                  {currentQ.explanation || 'Jawaban di atas sesuai dengan prinsip sains dan fakta wawasan resmi.'}
                 </p>
+
                 <button
                   onClick={handleNext}
                   className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 pressable"

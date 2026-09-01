@@ -462,9 +462,32 @@ function MainScreen() {
 
                 {/* Explanation if Answered */}
                 {isAnswered && (
-                  <View style={[styles.expBox, { backgroundColor: colors.cardSubtle, borderColor: colors.cardBorder }]}>
-                    <Text style={[styles.expTitle, { color: colors.text }]}>💡 Pembahasan:</Text>
-                    <Text style={[styles.expText, { color: colors.textMuted }]}>{currentQ.explanation}</Text>
+                  <View style={[styles.expBox, {
+                    backgroundColor: selectedOpt === currentQ.answer_index ? 'rgba(16,185,129,0.08)' : 'rgba(244,63,94,0.08)',
+                    borderColor: selectedOpt === currentQ.answer_index ? 'rgba(16,185,129,0.3)' : 'rgba(244,63,94,0.3)'
+                  }]}>
+                    <Text style={{
+                      fontSize: 13,
+                      fontWeight: '700',
+                      color: selectedOpt === currentQ.answer_index ? colors.emerald : colors.rose,
+                      marginBottom: 6,
+                    }}>
+                      {selectedOpt === currentQ.answer_index ? '✓ Jawaban Anda Benar!' : '✗ Jawaban Anda Kurang Tepat'}
+                    </Text>
+
+                    {selectedOpt !== currentQ.answer_index && (
+                      <View style={{ marginBottom: 8, padding: 8, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.04)' }}>
+                        <Text style={{ fontSize: 11, color: colors.rose, marginBottom: 2 }}>
+                          Pilihan Anda: {selectedOpt !== null && selectedOpt >= 0 && currentQ.options[selectedOpt] ? `${String.fromCharCode(65 + selectedOpt)}. ${currentQ.options[selectedOpt]}` : 'Waktu Habis'}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: colors.emerald, fontWeight: '700' }}>
+                          Jawaban Benar: {String.fromCharCode(65 + currentQ.answer_index)}. {currentQ.options[currentQ.answer_index]}
+                        </Text>
+                      </View>
+                    )}
+
+                    <Text style={[styles.expTitle, { color: colors.text }]}>💡 Pembahasan Ilmiah:</Text>
+                    <Text style={[styles.expText, { color: colors.textMuted }]}>{currentQ.explanation || 'Jawaban di atas sesuai kaidah resmi.'}</Text>
 
                     <TouchableOpacity
                       style={styles.nextBtn}

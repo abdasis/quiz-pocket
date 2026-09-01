@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowRight, RotateCcw, Award, Clock, Sparkles, Check, X, ArrowLeft, ShieldAlert, AlertTriangle, Share2, Copy, CheckCheck, Zap, RefreshCw } from 'lucide-react'
+import { ArrowRight, RotateCcw, Award, Clock, Sparkles, Check, X, ArrowLeft, ShieldAlert, AlertTriangle, Share2, Copy, CheckCheck, Zap, RefreshCw, CheckCircle2, XCircle } from 'lucide-react'
 import confetti from 'canvas-confetti'
 
 export interface Question {
@@ -717,14 +717,67 @@ export function QuizPlayer({
 
         {/* Explanation Card upon Answered */}
         {isAnswered && (
-          <div className="p-5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-800/40 space-y-1.5 animate-in fade-in duration-200">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-900 dark:text-indigo-300">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-              <span>Penjelasan Jawaban & Logika:</span>
+          <div className={`p-5 rounded-2xl border space-y-3 animate-in fade-in duration-200 ${
+            selectedOption === currentQ.answer_index
+              ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200/60 dark:border-emerald-800/40'
+              : 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200/60 dark:border-rose-800/40'
+          }`}>
+            {/* Status Header */}
+            <div className="flex items-center justify-between pb-2 border-b border-black/[0.05] dark:border-white/[0.05]">
+              <div className="flex items-center gap-2">
+                {selectedOption === currentQ.answer_index ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300">
+                      Jawaban Anda Benar! (+{currentQ.points || 10} Pts)
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                    <span className="text-xs font-bold text-rose-900 dark:text-rose-300">
+                      Jawaban Anda Kurang Tepat
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
-            <p className="exam-explanation text-indigo-950/90 dark:text-indigo-200/90 leading-relaxed">
-              {currentQ.explanation || 'Jawaban di atas sesuai dengan prinsip sains dan fakta wawasan umum resmi.'}
-            </p>
+
+            {/* Answer Comparison Details if Wrong */}
+            {selectedOption !== currentQ.answer_index && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <div className="p-3 rounded-xl bg-white/80 dark:bg-[#151518]/80 border border-rose-200/50 dark:border-rose-900/40 space-y-1">
+                  <span className="text-[10px] font-mono font-bold text-rose-500 uppercase tracking-wider">
+                    Jawaban Anda:
+                  </span>
+                  <p className="font-semibold text-rose-700 dark:text-rose-300">
+                    {selectedOption !== null && selectedOption >= 0 && currentQ.options[selectedOption]
+                      ? `${String.fromCharCode(65 + selectedOption)}. ${currentQ.options[selectedOption]}`
+                      : 'Waktu Habis / Tidak Memilih'}
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white/80 dark:bg-[#151518]/80 border border-emerald-200/50 dark:border-emerald-900/40 space-y-1">
+                  <span className="text-[10px] font-mono font-bold text-emerald-600 uppercase tracking-wider">
+                    Jawaban Benar Seharusnya:
+                  </span>
+                  <p className="font-semibold text-emerald-700 dark:text-emerald-300">
+                    {String.fromCharCode(65 + currentQ.answer_index)}. {currentQ.options[currentQ.answer_index]}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* In-depth Conceptual Explanation */}
+            <div className="space-y-1 pt-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-neutral-800 dark:text-neutral-200">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>Pembahasan & Konsep Ilmiah:</span>
+              </div>
+              <p className="exam-explanation text-neutral-700 dark:text-neutral-300 leading-relaxed text-xs sm:text-sm">
+                {currentQ.explanation || 'Jawaban di atas sesuai dengan prinsip sains dan fakta wawasan resmi.'}
+              </p>
+            </div>
           </div>
         )}
 
