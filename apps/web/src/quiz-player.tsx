@@ -14,19 +14,26 @@ export interface Question {
 }
 
 interface QuizPlayerProps {
+  slotId: number
   categoryTitle: string
   questions: Question[]
-  onFinish: (score: number, total: number) => void
+  secondsRemainingSlot: number
+  onFinish: (score: number, total: number, correctCount: number) => void
   onExit: () => void
 }
 
-export function QuizPlayer({ categoryTitle, questions, onFinish, onExit }: QuizPlayerProps) {
+export function QuizPlayer({
+  categoryTitle,
+  questions,
+  onFinish,
+  onExit,
+}: QuizPlayerProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [selectedOption, setSelectedOption] = useState<number | null>(null)
   const [isAnswered, setIsAnswered] = useState(false)
   const [score, setScore] = useState(0)
   const [correctCount, setCorrectCount] = useState(0)
-  const [secondsLeft, setSecondsLeft] = useState(20)
+  const [secondsLeft, setSecondsLeft] = useState(25)
   const [isCompleted, setIsCompleted] = useState(false)
 
   const currentQ = questions[currentIndex]
@@ -70,15 +77,17 @@ export function QuizPlayer({ categoryTitle, questions, onFinish, onExit }: QuizP
       setCurrentIndex((prev) => prev + 1)
       setSelectedOption(null)
       setIsAnswered(false)
-      setSecondsLeft(20)
+      setSecondsLeft(25)
     } else {
       setIsCompleted(true)
       confetti({
-        particleCount: 80,
-        spread: 70,
+        particleCount: 100,
+        spread: 80,
         origin: { y: 0.6 },
       })
-      onFinish(score, questions.length * 10)
+      const finalScore = score + (selectedOption === currentQ.answer_index ? 0 : 0)
+      const finalCorrect = correctCount
+      onFinish(finalScore, questions.length * 10, finalCorrect)
     }
   }
 
@@ -88,29 +97,31 @@ export function QuizPlayer({ categoryTitle, questions, onFinish, onExit }: QuizP
     setIsAnswered(false)
     setScore(0)
     setCorrectCount(0)
-    setSecondsLeft(20)
+    setSecondsLeft(25)
     setIsCompleted(false)
   }
 
   if (isCompleted) {
     const accuracy = Math.round((correctCount / questions.length) * 100)
     return (
-      <div className="w-full max-w-xl mx-auto py-8 animate-in fade-in zoom-in-95 duration-200">
+      <div className="w-full max-w-xl mx-auto py-6 animate-in fade-in zoom-in-95 duration-200">
         <div className="bg-white dark:bg-[#12131a] rounded-3xl border border-black/[0.06] dark:border-white/[0.08] p-6 sm:p-8 text-center space-y-6">
           <div className="w-20 h-20 mx-auto rounded-3xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500">
             <Award className="w-10 h-10" />
           </div>
 
           <div className="space-y-2">
-            <h2 className="text-2xl font-bold text-neutral-900 dark:text-white">Kuis Selesai! 🎉</h2>
-            <p className="text-sm text-neutral-500">{categoryTitle}</p>
+            <h2 className="text-2xl font-bold text-neutral-900 dark:text-white">Kuis Sesi Selesai! 🎉</h2>
+            <p className="text-xs text-neutral-500 font-medium">
+              Poin kamu telah ditambahkan ke akumulasi profil & leaderboard!
+            </p>
           </div>
 
           {/* Stats Grid */}
           <div className="grid grid-cols-3 gap-3">
             <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-black/[0.04] dark:border-white/[0.04]">
-              <p className="text-xs text-neutral-500 font-medium">Skor Total</p>
-              <p className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-1">{score}</p>
+              <p className="text-xs text-neutral-500 font-medium">Poin Diperoleh</p>
+              <p className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-1">+{score}</p>
             </div>
             <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-black/[0.04] dark:border-white/[0.04]">
               <p className="text-xs text-neutral-500 font-medium">Benar</p>
@@ -131,13 +142,13 @@ export function QuizPlayer({ categoryTitle, questions, onFinish, onExit }: QuizP
               className="w-full sm:flex-1 h-12 rounded-2xl bg-black/[0.05] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] border border-black/[0.08] dark:border-white/[0.1] text-neutral-900 dark:text-white font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer pressable"
             >
               <RotateCcw className="w-4 h-4" />
-              Ulangi Kuis
+              Latihan Ulang
             </button>
             <button
               onClick={onExit}
               className="w-full sm:flex-1 h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer pressable"
             >
-              Pilih Kategori Lain
+              Kembali ke Beranda
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -152,7 +163,8 @@ export function QuizPlayer({ categoryTitle, questions, onFinish, onExit }: QuizP
       <div className="space-y-3">
         <div className="flex items-center justify-between text-xs font-semibold text-neutral-500">
           <span>
-            Soal <b className="text-neutral-900 dark:text-white">{currentIndex + 1}</b> dari {questions.length}
+            Soal <b className="text-neutral-900 dark:text-white">{currentIndex + 1}</b> dari {questions.length} •{' '}
+            <span className="text-indigo-600 dark:text-indigo-400">{categoryTitle}</span>
           </span>
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-neutral-100 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 font-mono">
             <Clock className="w-3.5 h-3.5" />
@@ -174,7 +186,7 @@ export function QuizPlayer({ categoryTitle, questions, onFinish, onExit }: QuizP
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60">
-              {currentQ.difficulty || 'General'}
+              {currentQ.difficulty || 'Live'}
             </span>
             <span className="text-xs font-semibold text-neutral-400">+{currentQ.points || 10} Poin</span>
           </div>
@@ -246,7 +258,7 @@ export function QuizPlayer({ categoryTitle, questions, onFinish, onExit }: QuizP
               onClick={handleNextQuestion}
               className="w-full h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer pressable"
             >
-              {currentIndex < questions.length - 1 ? 'Soal Berikutnya' : 'Lihat Hasil Akhir'}
+              {currentIndex < questions.length - 1 ? 'Soal Berikutnya' : 'Selesaikan Kuis & Simpan Poin'}
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

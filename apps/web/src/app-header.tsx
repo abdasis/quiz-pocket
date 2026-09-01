@@ -1,11 +1,14 @@
 import { useState } from 'react'
-import { Trophy, Flame, Moon, Sun, ArrowLeft, LogIn, LogOut } from 'lucide-react'
+import { Trophy, Flame, Moon, Sun, ArrowLeft, LogIn, LogOut, Award } from 'lucide-react'
 
 export interface AuthUser {
   id: number
   email: string
   name: string
   avatar_url?: string
+  points?: number
+  streak?: number
+  quizzes_completed?: number
 }
 
 interface AppHeaderProps {
@@ -24,7 +27,6 @@ export function AppHeader({
   onToggleTheme,
   onHomeClick,
   currentTitle,
-  streak = 0,
   user,
   onOpenLogin,
   onLogout,
@@ -56,10 +58,10 @@ export function AppHeader({
                 <h1 className="text-base font-bold text-neutral-900 dark:text-white leading-tight flex items-center gap-1.5">
                   Quiz Pocket
                   <span className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60">
-                    Pro
+                    Live
                   </span>
                 </h1>
-                <p className="text-[11px] text-neutral-500 font-medium">Asah wawasan & logika</p>
+                <p className="text-[11px] text-neutral-500 font-medium">Rotasi kuis tiap 30 menit</p>
               </div>
             </button>
           )}
@@ -67,17 +69,25 @@ export function AppHeader({
           {currentTitle && (
             <div className="truncate max-w-[180px] sm:max-w-xs">
               <h2 className="text-sm font-bold text-neutral-900 dark:text-white truncate">{currentTitle}</h2>
-              <p className="text-[11px] text-neutral-500">Mode Kuis Aktif</p>
+              <p className="text-[11px] text-neutral-500">Sesi 30 Menit Sedang Berjalan</p>
             </div>
           )}
         </div>
 
         {/* Right Stats & Theme Switcher & User Profile */}
         <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* User Points Badge */}
+          {user && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/40 text-indigo-900 dark:text-indigo-300">
+              <Award className="w-4 h-4 text-indigo-500" />
+              <span className="text-xs font-extrabold font-mono">{user.points || 0} pts</span>
+            </div>
+          )}
+
           {/* Streak Counter */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/40 text-amber-900 dark:text-amber-300">
             <Flame className="w-4 h-4 text-amber-500 fill-amber-500" />
-            <span className="text-xs font-bold font-mono">{streak}</span>
+            <span className="text-xs font-bold font-mono">{user?.streak || 1}</span>
           </div>
 
           {/* Theme Switcher Button */}
@@ -118,6 +128,10 @@ export function AppHeader({
                   <div className="p-2 border-b border-black/[0.06] dark:border-white/[0.08]">
                     <p className="text-xs font-bold text-neutral-900 dark:text-white truncate">{user.name || 'User'}</p>
                     <p className="text-[11px] text-neutral-500 truncate">{user.email}</p>
+                    <div className="mt-1.5 flex items-center justify-between text-[10px] text-neutral-500">
+                      <span>Total Poin:</span>
+                      <b className="text-indigo-600 dark:text-indigo-400 font-mono">{user.points || 0}</b>
+                    </div>
                   </div>
                   <button
                     onClick={() => {

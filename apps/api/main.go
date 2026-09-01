@@ -1,11 +1,12 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -16,13 +17,16 @@ import (
 )
 
 type User struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Email     string    `gorm:"uniqueIndex;not null" json:"email"`
-	Name      string    `json:"name"`
-	AvatarURL string    `json:"avatar_url"`
-	GoogleID  string    `gorm:"index" json:"google_id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID               uint      `gorm:"primaryKey" json:"id"`
+	Email            string    `gorm:"uniqueIndex;not null" json:"email"`
+	Name             string    `json:"name"`
+	AvatarURL        string    `json:"avatar_url"`
+	GoogleID         string    `gorm:"index" json:"google_id"`
+	Points           int       `gorm:"default:0" json:"points"`
+	QuizzesCompleted int       `gorm:"default:0" json:"quizzes_completed"`
+	Streak           int       `gorm:"default:1" json:"streak"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 type Category struct {
@@ -49,9 +53,10 @@ type Question struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-type QuizResult struct {
+type QuizSlotSubmission struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
-	UserID       uint      `gorm:"index" json:"user_id"`
+	SlotID       int64     `gorm:"index:idx_user_slot,unique;not null" json:"slot_id"`
+	UserID       uint      `gorm:"index:idx_user_slot,unique;not null" json:"user_id"`
 	UserEmail    string    `json:"user_email"`
 	UserName     string    `json:"user_name"`
 	CategoryID   uint      `json:"category_id"`
@@ -70,13 +75,13 @@ func main() {
 	}
 
 	// Auto-migrate
-	if err := db.AutoMigrate(&User{}, &Category{}, &Question{}, &QuizResult{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Category{}, &Question{}, &QuizSlotSubmission{}); err != nil {
 		log.Fatalf("Auto-migration failed: %v", err)
 	}
 
-	var catCount int64
-	db.Model(&Category{}).Count(&catCount)
-	if catCount == 0 {
+	var qCount int64
+	db.Model(&Question{}).Count(&qCount)
+	if qCount < 20 {
 		seedDatabase(db)
 	}
 
@@ -108,18 +113,19 @@ func main() {
 		var user User
 		err := db.Where("email = ?", req.Email).First(&user).Error
 		if err != nil {
-			// Create new user
 			user = User{
-				Email:     req.Email,
-				Name:      req.Name,
-				AvatarURL: req.AvatarURL,
-				GoogleID:  req.GoogleID,
+				Email:            req.Email,
+				Name:             req.Name,
+				AvatarURL:        req.AvatarURL,
+				GoogleID:         req.GoogleID,
+				Points:           0,
+				QuizzesCompleted: 0,
+				Streak:           1,
 			}
 			if err := db.Create(&user).Error; err != nil {
 				return c.Status(500).JSON(fiber.Map{"error": "Failed to create user"})
 			}
 		} else {
-			// Update existing user info
 			if req.Name != "" {
 				user.Name = req.Name
 			}
@@ -138,12 +144,162 @@ func main() {
 		})
 	})
 
-	// 2. Categories
-	api.Get("/categories", func(c *fiber.Ctx) error {
-		var cats []Category
-		if err := db.Find(&cats).Error; err != nil {
+	// 2. User Profile & Stats
+	api.Get("/user/profile", func(c *fiber.Ctx) error {
+		email := c.Query("email")
+		if email == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "Email parameter required"})
+		}
+		var user User
+		if err := db.Where("email = ?", email).First(&user).Error; err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": "User not found"})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": user})
+	})
+
+	// 3. Current Live 30-Minute Slot Query
+	api.Get("/live-slot", func(c *fiber.Ctx) error {
+		userEmail := c.Query("email")
+		now := time.Now()
+		// Slot duration = 30 minutes (1800 seconds)
+		const slotDurationSec int64 = 1800
+		currentUnix := now.Unix()
+		slotID := currentUnix / slotDurationSec
+		slotStartTime := time.Unix(slotID*slotDurationSec, 0)
+		slotEndTime := time.Unix((slotID+1)*slotDurationSec, 0)
+		secondsRemaining := slotEndTime.Unix() - currentUnix
+
+		// Pick deterministic rotating category for this slot
+		var categories []Category
+		db.Find(&categories)
+		if len(categories) == 0 {
+			return c.Status(500).JSON(fiber.Map{"error": "No categories available"})
+		}
+		catIndex := int(slotID % int64(len(categories)))
+		activeCategory := categories[catIndex]
+
+		// Fetch deterministic questions for this slot
+		var allQuestions []Question
+		db.Where("category_id = ?", activeCategory.ID).Order("id ASC").Find(&allQuestions)
+
+		// Select 5 questions deterministically using hash of slotID
+		var slotQuestions []Question
+		if len(allQuestions) > 0 {
+			h := sha256.New()
+			binary.Write(h, binary.BigEndian, slotID)
+			seedBytes := h.Sum(nil)
+
+			count := 5
+			if len(allQuestions) < count {
+				count = len(allQuestions)
+			}
+
+			offset := int(seedBytes[0]) % len(allQuestions)
+			for i := 0; i < count; i++ {
+				idx := (offset + i) % len(allQuestions)
+				q := allQuestions[idx]
+				var opts []string
+				if err := json.Unmarshal([]byte(q.Options), &opts); err == nil {
+					q.OptionsList = opts
+				}
+				slotQuestions = append(slotQuestions, q)
+			}
+		}
+
+		// Check if current user already completed this slot
+		var submission QuizSlotSubmission
+		isCompleted := false
+		if userEmail != "" {
+			err := db.Where("slot_id = ? AND user_email = ?", slotID, userEmail).First(&submission).Error
+			if err == nil {
+				isCompleted = true
+			}
+		}
+
+		return c.JSON(fiber.Map{
+			"success":           true,
+			"slot_id":           slotID,
+			"slot_start":        slotStartTime,
+			"slot_end":          slotEndTime,
+			"seconds_remaining": secondsRemaining,
+			"category":          activeCategory,
+			"questions":         slotQuestions,
+			"is_completed":      isCompleted,
+			"submission":        submission,
+		})
+	})
+
+	// 4. Submit Live 30-Minute Slot
+	api.Post("/live-slot/submit", func(c *fiber.Ctx) error {
+		var req struct {
+			SlotID       int64  `json:"slot_id"`
+			UserEmail    string `json:"user_email"`
+			Score        int    `json:"score"`
+			Total        int    `json:"total"`
+			CorrectCount int    `json:"correct_count"`
+			TimeSpentSec int    `json:"time_spent_sec"`
+		}
+		if err := c.BodyParser(&req); err != nil || req.UserEmail == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "Invalid payload"})
+		}
+
+		// Verify slot validity (prevent submitting expired slot)
+		const slotDurationSec int64 = 1800
+		currentSlotID := time.Now().Unix() / slotDurationSec
+		if req.SlotID != currentSlotID {
+			return c.Status(400).JSON(fiber.Map{"error": "Waktu kuis sesi ini sudah habis. Silakan ikuti sesi kuis berikutnya."})
+		}
+
+		var user User
+		if err := db.Where("email = ?", req.UserEmail).First(&user).Error; err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": "User not found"})
+		}
+
+		// Check if already submitted for this slot
+		var existing QuizSlotSubmission
+		if err := db.Where("slot_id = ? AND user_id = ?", req.SlotID, user.ID).First(&existing).Error; err == nil {
+			return c.Status(400).JSON(fiber.Map{"error": "Anda sudah menyelesaikan kuis sesi 30 menit ini!"})
+		}
+
+		// Save submission
+		submission := QuizSlotSubmission{
+			SlotID:       req.SlotID,
+			UserID:       user.ID,
+			UserEmail:    user.Email,
+			UserName:     user.Name,
+			Score:        req.Score,
+			Total:        req.Total,
+			CorrectCount: req.CorrectCount,
+			TimeSpentSec: req.TimeSpentSec,
+		}
+		if err := db.Create(&submission).Error; err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
+
+		// Add score to user points & increment completed
+		user.Points += req.Score
+		user.QuizzesCompleted += 1
+		db.Save(&user)
+
+		return c.JSON(fiber.Map{
+			"success":    true,
+			"points":     user.Points,
+			"submission": submission,
+			"user":       user,
+		})
+	})
+
+	// 5. Global Leaderboard
+	api.Get("/leaderboard", func(c *fiber.Ctx) error {
+		var users []User
+		db.Order("points DESC, quizzes_completed DESC, updated_at ASC").Limit(25).Find(&users)
+		return c.JSON(fiber.Map{"success": true, "data": users})
+	})
+
+	// 6. Categories List
+	api.Get("/categories", func(c *fiber.Ctx) error {
+		var cats []Category
+		db.Find(&cats)
 		for i := range cats {
 			var count int64
 			db.Model(&Question{}).Where("category_id = ?", cats[i].ID).Count(&count)
@@ -152,107 +308,18 @@ func main() {
 		return c.JSON(fiber.Map{"success": true, "data": cats})
 	})
 
-	// 3. Questions by Category
-	api.Get("/quiz/:slug", func(c *fiber.Ctx) error {
-		slug := c.Params("slug")
-		var cat Category
-		if err := db.Where("slug = ?", slug).First(&cat).Error; err != nil {
-			return c.Status(404).JSON(fiber.Map{"error": "Kategori kuis tidak ditemukan"})
-		}
-
-		var questions []Question
-		if err := db.Where("category_id = ?", cat.ID).Order("id ASC").Find(&questions).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-		}
-
-		for i := range questions {
-			var opts []string
-			if err := json.Unmarshal([]byte(questions[i].Options), &opts); err == nil {
-				questions[i].OptionsList = opts
-			}
-		}
-
-		return c.JSON(fiber.Map{
-			"success":  true,
-			"category": cat,
-			"data":     questions,
-		})
-	})
-
-	// 4. Submit Quiz Result
-	api.Post("/quiz/submit", func(c *fiber.Ctx) error {
-		var req struct {
-			UserID       uint   `json:"user_id"`
-			UserEmail    string `json:"user_email"`
-			UserName     string `json:"user_name"`
-			CategoryID   uint   `json:"category_id"`
-			Score        int    `json:"score"`
-			Total        int    `json:"total"`
-			CorrectCount int    `json:"correct_count"`
-			TimeSpentSec int    `json:"time_spent_sec"`
-		}
-		if err := c.BodyParser(&req); err != nil {
-			return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
-		}
-
-		res := QuizResult{
-			UserID:       req.UserID,
-			UserEmail:    req.UserEmail,
-			UserName:     req.UserName,
-			CategoryID:   req.CategoryID,
-			Score:        req.Score,
-			Total:        req.Total,
-			CorrectCount: req.CorrectCount,
-			TimeSpentSec: req.TimeSpentSec,
-		}
-		if err := db.Create(&res).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-		}
-
-		return c.JSON(fiber.Map{"success": true, "data": res})
-	})
-
-	// 5. Random Quiz (Campuran)
-	api.Get("/quiz-random", func(c *fiber.Ctx) error {
-		limit, _ := strconv.Atoi(c.Query("limit", "10"))
-		if limit <= 0 || limit > 50 {
-			limit = 10
-		}
-
-		var questions []Question
-		if err := db.Preload("Category").Order("RANDOM()").Limit(limit).Find(&questions).Error; err != nil {
-			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-		}
-
-		for i := range questions {
-			var opts []string
-			if err := json.Unmarshal([]byte(questions[i].Options), &opts); err == nil {
-				questions[i].OptionsList = opts
-			}
-		}
-
-		return c.JSON(fiber.Map{
-			"success": true,
-			"total":   len(questions),
-			"data":    questions,
-		})
-	})
-
-	// 6. Leaderboard / History
-	api.Get("/leaderboard", func(c *fiber.Ctx) error {
-		var results []QuizResult
-		db.Order("score DESC, created_at DESC").Limit(20).Find(&results)
-		return c.JSON(fiber.Map{"success": true, "data": results})
-	})
-
 	// 7. Health Check
 	api.Get("/health", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"status": "ok", "app": "Quiz Pocket API", "timestamp": time.Now()})
+		return c.JSON(fiber.Map{"status": "ok", "app": "Quiz Pocket API (30-Min Rotator)", "timestamp": time.Now()})
 	})
 
 	// Static Web Frontend Serving
-	app.Static("/", "/home/abdasis/Projects/quiz-pocket/apps/web/dist")
-	app.Get("*", func(c *fiber.Ctx) error {
+	app.Static("/assets", "/home/abdasis/Projects/quiz-pocket/apps/web/dist/assets")
+	app.Get("/*", func(c *fiber.Ctx) error {
+		path := c.Path()
+		if len(path) >= 4 && path[:4] == "/api" {
+			return c.Status(404).JSON(fiber.Map{"error": "Endpoint not found"})
+		}
 		return c.SendFile("/home/abdasis/Projects/quiz-pocket/apps/web/dist/index.html")
 	})
 
@@ -260,7 +327,7 @@ func main() {
 	if port == "" {
 		port = "8089"
 	}
-	fmt.Printf("Quiz Pocket Server running on :%s\n", port)
+	fmt.Printf("Quiz Pocket 30-Min Server running on :%s\n", port)
 	log.Fatal(app.Listen(":" + port))
 }
 
@@ -273,7 +340,10 @@ func seedDatabase(db *gorm.DB) {
 	}
 
 	for _, c := range categories {
-		db.Create(&c)
+		var existing Category
+		if err := db.Where("slug = ?", c.Slug).First(&existing).Error; err != nil {
+			db.Create(&c)
+		}
 	}
 
 	var catIslam, catWeb, catGo, catLogic Category
@@ -283,108 +353,37 @@ func seedDatabase(db *gorm.DB) {
 	db.Where("slug = ?", "general-logic").First(&catLogic)
 
 	questions := []Question{
-		{
-			CategoryID:  catIslam.ID,
-			Question:    "Berapa jumlah rukun iman dalam ajaran Islam?",
-			Options:     `["4", "5", "6", "7"]`,
-			AnswerIndex: 2,
-			Explanation: "Rukun Iman ada 6: Iman kepada Allah, Malaikat, Kitab-kitab, Rasul-rasul, Hari Kiamat, dan Qada & Qadar.",
-			Difficulty:  "easy",
-			Points:      10,
-		},
-		{
-			CategoryID:  catIslam.ID,
-			Question:    "Surah apa yang disebut sebagai 'Ummul Kitab' atau 'Ummul Qur'an'?",
-			Options:     `["Al-Baqarah", "Al-Fatihah", "Yasin", "Al-Ikhlas"]`,
-			AnswerIndex: 1,
-			Explanation: "Surah Al-Fatihah disebut Ummul Kitab (Induk Al-Kitab) karena mencakup pokok-pokok ajaran Al-Qur'an.",
-			Difficulty:  "easy",
-			Points:      10,
-		},
-		{
-			CategoryID:  catIslam.ID,
-			Question:    "Siapakah Sahabat Nabi yang menemani beliau hijrah dan bersembunyi di Gua Tsur?",
-			Options:     `["Umar bin Khattab", "Ali bin Abi Thalib", "Abu Bakar Ash-Shiddiq", "Utsman bin Affan"]`,
-			AnswerIndex: 2,
-			Explanation: "Abu Bakar Ash-Shiddiq radhiyallahu 'anhu adalah sahabat yang menemani Rasulullah ﷺ dalam perjalanan hijrah ke Madinah.",
-			Difficulty:  "medium",
-			Points:      10,
-		},
-		{
-			CategoryID:  catIslam.ID,
-			Question:    "Mushaf Al-Qur'an standar Madani yang dicetak Kompleks Percetakan Al-Qur'an Raja Fahd umumnya terdiri dari berapa baris per halaman?",
-			Options:     `["13 Baris", "15 Baris", "17 Baris", "18 Baris"]`,
-			AnswerIndex: 1,
-			Explanation: "Mushaf Madani Rasm Utsmani standar King Fahd Complex memiliki format 15 baris per halaman dan berakhir pada nomor ayat di setiap akhir halaman (Ayat Pojok).",
-			Difficulty:  "medium",
-			Points:      10,
-		},
-		{
-			CategoryID:  catWeb.ID,
-			Question:    "Di CSS modern, unit viewport apa yang otomatis menyesuaikan tinggi layar smartphone saat browser toolbar/address bar muncul dan hilang?",
-			Options:     `["vh", "100vh", "100dvh", "100lvh"]`,
-			AnswerIndex: 2,
-			Explanation: "100dvh (dynamic viewport height) memperbarui tingginya secara dinamis saat bilah antarmuka browser mobile mengembang atau menyusut.",
-			Difficulty:  "medium",
-			Points:      10,
-		},
-		{
-			CategoryID:  catWeb.ID,
-			Question:    "Apa fungsi dari `scrollbar-gutter: stable` pada CSS?",
-			Options:     `["Menghilangkan scrollbar sepenuhnya", "Mencegah terjadinya Layout Shift saat scrollbar muncul/hilang", "Membuat scrollbar berwarna transparan", "Mengunci scroll mouse pada container"]`,
-			AnswerIndex: 1,
-			Explanation: "scrollbar-gutter: stable mencadangkan ruang untuk scrollbar sehingga halaman tidak mengalami pergeseran tata letak (layout shift) saat konten berubah panjang.",
-			Difficulty:  "medium",
-			Points:      10,
-		},
-		{
-			CategoryID:  catWeb.ID,
-			Question:    "Pada standar Apple Human Interface Guidelines (HIG), berapa ukuran minimal touch target untuk navigasi mobile yang ramah ibu jari?",
-			Options:     `["24x24px", "32x32px", "44x44px", "64x64px"]`,
-			AnswerIndex: 2,
-			Explanation: "Apple HIG merekomendasikan area sentuh (touch target) minimal 44x44 points/pixels agar mudah dan akurat ditekan oleh jemari pengguna.",
-			Difficulty:  "easy",
-			Points:      10,
-		},
-		{
-			CategoryID:  catGo.ID,
-			Question:    "Bagaimana cara membaca context deadline atau pembatalan di dalam perulangan goroutine di Go?",
-			Options:     `["Menggunakan try-catch block", "Menggunakan switch case pada ctx.Done()", "Menggunakan select { case <-ctx.Done(): return }", "Menjalankan runtime.GC()"]`,
-			AnswerIndex: 2,
-			Explanation: "Pola idiomatik Go menggunakan select statement yang mendengarkan sinyal dari channel <-ctx.Done() untuk membatalkan proses yang berjalan.",
-			Difficulty:  "medium",
-			Points:      10,
-		},
-		{
-			CategoryID:  catGo.ID,
-			Question:    "Di framework Go Fiber, di mana middleware CORS sebaiknya didaftarkan?",
-			Options:     `["Setelah semua handler route selesai", "Sebelum registrasi route kelompok (app.Group/app.Get)", "Di dalam goroutine terpisah", "Di dalam function init() database"]`,
-			AnswerIndex: 1,
-			Explanation: "Middleware CORS harus dipasang di awal sebelum handler route dieksekusi agar pre-flight request OPTIONS dapat ditangani dengan benar.",
-			Difficulty:  "easy",
-			Points:      10,
-		},
-		{
-			CategoryID:  catLogic.ID,
-			Question:    "Lanjutkan pola bilangan berikut: 2, 6, 12, 20, 30, ...?",
-			Options:     `["38", "40", "42", "44"]`,
-			AnswerIndex: 2,
-			Explanation: "Pola selisih: +4, +6, +8, +10, +12. Maka 30 + 12 = 42 (atau pola n * (n+1) -> 1*2, 2*3, 3*4, 4*5, 5*6, 6*7=42).",
-			Difficulty:  "easy",
-			Points:      10,
-		},
-		{
-			CategoryID:  catLogic.ID,
-			Question:    "Manakah kompleksitas waktu (Big-O) rata-rata dari pencarian Binary Search pada array terurut?",
-			Options:     `["O(1)", "O(n)", "O(log n)", "O(n log n)"]`,
-			AnswerIndex: 2,
-			Explanation: "Binary search membagi ruang pencarian menjadi setengah pada setiap langkahnya, sehingga memiliki kompleksitas waktu O(log n).",
-			Difficulty:  "easy",
-			Points:      10,
-		},
+		// Islam
+		{CategoryID: catIslam.ID, Question: "Berapa jumlah rukun iman dalam ajaran Islam?", Options: `["4", "5", "6", "7"]`, AnswerIndex: 2, Explanation: "Rukun Iman ada 6: Iman kepada Allah, Malaikat, Kitab, Rasul, Hari Akhir, dan Qada & Qadar.", Difficulty: "easy", Points: 10},
+		{CategoryID: catIslam.ID, Question: "Surah apa yang disebut sebagai 'Ummul Kitab' atau 'Ummul Qur'an'?", Options: `["Al-Baqarah", "Al-Fatihah", "Yasin", "Al-Ikhlas"]`, AnswerIndex: 1, Explanation: "Surah Al-Fatihah disebut Ummul Kitab karena mencakup inti pesan Al-Qur'an.", Difficulty: "easy", Points: 10},
+		{CategoryID: catIslam.ID, Question: "Siapakah Sahabat Nabi yang menemani beliau hijrah dan bersembunyi di Gua Tsur?", Options: `["Umar bin Khattab", "Ali bin Abi Thalib", "Abu Bakar Ash-Shiddiq", "Utsman bin Affan"]`, AnswerIndex: 2, Explanation: "Abu Bakar Ash-Shiddiq RA adalah sahabat yang menemani Rasulullah ﷺ dalam perjalanan hijrah.", Difficulty: "medium", Points: 10},
+		{CategoryID: catIslam.ID, Question: "Mushaf Al-Qur'an standar Madani Raja Fahd umumnya terdiri dari berapa baris per halaman?", Options: `["13 Baris", "15 Baris", "17 Baris", "18 Baris"]`, AnswerIndex: 1, Explanation: "Mushaf Madani Rasm Utsmani standar King Fahd Complex memiliki format 15 baris per halaman.", Difficulty: "medium", Points: 10},
+		{CategoryID: catIslam.ID, Question: "Nabi yang memiliki mukjizat dapat berbicara dengan hewan dan mengendalikan angin adalah?", Options: `["Nabi Daud AS", "Nabi Sulaiman AS", "Nabi Musa AS", "Nabi Yusuf AS"]`, AnswerIndex: 1, Explanation: "Nabi Sulaiman 'alaihissalam dikaruniai kemampuan memahami bahasa hewan dan memerintah angin serta jin.", Difficulty: "easy", Points: 10},
+		{CategoryID: catIslam.ID, Question: "Bulan ke-9 dalam kalender Hijriyah di mana umat Islam diwajibkan berpuasa adalah?", Options: `["Sya'ban", "Ramadhan", "Syawwal", "Muharram"]`, AnswerIndex: 1, Explanation: "Bulan Ramadhan adalah bulan ke-9 dalam kalender Hijriyah.", Difficulty: "easy", Points: 10},
+
+		// Web Dev
+		{CategoryID: catWeb.ID, Question: "Unit CSS apa yang dinamis menyesuaikan tinggi viewport saat mobile browser address bar muncul/hilang?", Options: `["vh", "100vh", "100dvh", "100lvh"]`, AnswerIndex: 2, Explanation: "100dvh (dynamic viewport height) menyesuaikan tinggi viewport dinamis pada peramban mobile.", Difficulty: "medium", Points: 10},
+		{CategoryID: catWeb.ID, Question: "Apa fungsi dari `scrollbar-gutter: stable` pada CSS?", Options: `["Menghilangkan scrollbar", "Mencegah pergeseran tata letak (Layout Shift)", "Membuat scrollbar transparan", "Mengunci mouse scroll"]`, AnswerIndex: 1, Explanation: "scrollbar-gutter: stable mencadangkan ruang scrollbar agar layout tidak berguncang saat konten bertambah.", Difficulty: "medium", Points: 10},
+		{CategoryID: catWeb.ID, Question: "Berdasarkan Apple HIG, berapa ukuran minimum touch target untuk navigasi ramah jari?", Options: `["24x24px", "32x32px", "44x44px", "64x64px"]`, AnswerIndex: 2, Explanation: "Apple HIG merekomendasikan touch target minimal 44x44 points/pixels.", Difficulty: "easy", Points: 10},
+		{CategoryID: catWeb.ID, Question: "Di React 19, hook apa yang diperkenalkan untuk menangani async transition dan pending state secara native?", Options: `["useActionState", "useAsyncEffect", "usePromise", "useFetch"]`, AnswerIndex: 0, Explanation: "useActionState adalah hook resmi React 19 untuk mengelola form actions dan status async pending.", Difficulty: "medium", Points: 10},
+		{CategoryID: catWeb.ID, Question: "Atribut rel apa yang penting disertakan saat menggunakan target='_blank' pada tag <a>?", Options: `["rel='nofollow'", "rel='noopener noreferrer'", "rel='preload'", "rel='canonical'"]`, AnswerIndex: 1, Explanation: "rel='noopener noreferrer' mencegah tab baru mengakses window.opener untuk keamanan isolasi proses.", Difficulty: "easy", Points: 10},
+
+		// Backend & Go
+		{CategoryID: catGo.ID, Question: "Bagaimana pola idiomatik mendengarkan pembatalan context di dalam loop goroutine di Go?", Options: `["try-catch block", "switch case ctx.Done()", "select { case <-ctx.Done(): return }", "runtime.GC()"]`, AnswerIndex: 2, Explanation: "Statement select dengan case <-ctx.Done() adalah pola standar Go menangani pembatalan context.", Difficulty: "medium", Points: 10},
+		{CategoryID: catGo.ID, Question: "Di Go Fiber, di mana middleware CORS sebaiknya didaftarkan?", Options: `["Setelah semua route selesai", "Sebelum handler route didaftarkan", "Di goroutine terpisah", "Di fungsi init DB"]`, AnswerIndex: 1, Explanation: "Middleware CORS harus didaftarkan di awal sebelum routes agar preflight OPTIONS tertangani.", Difficulty: "easy", Points: 10},
+		{CategoryID: catGo.ID, Question: "Apa tipe data bawaan Go yang aman untuk sharing data antar goroutine tanpa explicit mutex lock?", Options: `["Slice", "Map", "Channel", "Pointer"]`, AnswerIndex: 2, Explanation: "Channel di Go dirancang untuk komunikasi thread-safe antargoroutine ('Do not communicate by sharing memory; instead, share memory by communicating').", Difficulty: "easy", Points: 10},
+		{CategoryID: catGo.ID, Question: "Keyword apa di Go yang digunakan untuk menunda eksekusi fungsi hingga fungsi pembungkusnya selesai?", Options: `["defer", "delay", "sleep", "yield"]`, AnswerIndex: 0, Explanation: "defer menunda eksekusi instruksi (misal closing file/database) sampai fungsi di sekelilingnya me-return nilai.", Difficulty: "easy", Points: 10},
+
+		// Logic
+		{CategoryID: catLogic.ID, Question: "Lanjutkan deret pola bilangan berikut: 2, 6, 12, 20, 30, ...?", Options: `["38", "40", "42", "44"]`, AnswerIndex: 2, Explanation: "Pola selisih: +4, +6, +8, +10, +12. Maka 30 + 12 = 42.", Difficulty: "easy", Points: 10},
+		{CategoryID: catLogic.ID, Question: "Berapa kompleksitas waktu (Big-O) rata-rata Binary Search pada array terurut?", Options: `["O(1)", "O(n)", "O(log n)", "O(n log n)"]`, AnswerIndex: 2, Explanation: "Binary search membagi ruang pencarian menjadi setengah pada tiap iterasinya, menghasilkan O(log n).", Difficulty: "easy", Points: 10},
+		{CategoryID: catLogic.ID, Question: "Jika 5 mesin dapat membuat 5 barang dalam 5 menit, berapa menit yang dibutuhkan 100 mesin untuk membuat 100 barang?", Options: `["5 Menit", "20 Menit", "50 Menit", "100 Menit"]`, AnswerIndex: 0, Explanation: "1 mesin membutuhkan 5 menit untuk membuat 1 barang. Maka 100 mesin membuat 100 barang secara paralel tetap dalam 5 menit.", Difficulty: "medium", Points: 10},
 	}
 
 	for _, q := range questions {
-		db.Create(&q)
+		var existing Question
+		if err := db.Where("question = ?", q.Question).First(&existing).Error; err != nil {
+			db.Create(&q)
+		}
 	}
 }
