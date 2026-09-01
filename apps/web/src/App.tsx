@@ -9,6 +9,7 @@ interface Category {
   slug: string
   title: string
   description: string
+  level: string
   icon: string
   question_count: number
 }
@@ -20,6 +21,7 @@ interface LiveSlotResponse {
   seconds_remaining: number
   category: Category
   questions: Question[]
+  question_count: number
   is_completed: boolean
   submission?: {
     score: number
@@ -120,7 +122,6 @@ export function App() {
     const timer = setInterval(() => {
       setSecondsRemaining((prev) => {
         if (prev <= 1) {
-          // Slot Expired! Auto reload next 30-min slot
           fetchLiveSlot()
           fetchLeaderboard()
           setIsPlaying(false)
@@ -194,6 +195,8 @@ export function App() {
     }
   }
 
+  const totalQuestions = liveSlot?.questions?.length || 10
+
   return (
     <div className="min-h-screen bg-[#f8fafc] dark:bg-[#090a0f] text-neutral-900 dark:text-neutral-100 flex flex-col transition-colors">
       <AppHeader
@@ -227,9 +230,9 @@ export function App() {
                 <div className="relative z-10 space-y-4">
                   {/* Top Badges & Countdown */}
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-xs font-bold border border-white/20">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-xs font-bold border border-white/20">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                      <span>KUIS SESI 30 MENIT AKTIF</span>
+                      <span>SESI KUIS AKTIF ({totalQuestions} SOAL)</span>
                     </div>
 
                     <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-2xl bg-black/30 backdrop-blur-md text-white border border-white/15 font-mono text-sm font-bold">
@@ -240,17 +243,20 @@ export function App() {
 
                   {/* Slot Title & Topic */}
                   <div className="space-y-2 max-w-xl">
-                    <div className="flex items-center gap-2 text-indigo-200 text-xs font-semibold uppercase tracking-wider">
+                    <div className="flex flex-wrap items-center gap-2 text-indigo-200 text-xs font-semibold uppercase tracking-wider">
                       <span>Topik Sesi Ini:</span>
-                      <span className="px-2 py-0.5 rounded-md bg-white/20 text-white font-bold">
+                      <span className="px-2.5 py-0.5 rounded-md bg-white/20 text-white font-bold">
                         {liveSlot.category.title}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-indigo-500/40 text-indigo-100 font-bold border border-white/15">
+                        {totalQuestions} Butir Soal
                       </span>
                     </div>
                     <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                      Selesaikan 5 Soal & Kumpulkan Poin!
+                      Asah Wawasan Nyata ({totalQuestions} Soal)
                     </h2>
                     <p className="text-sm text-indigo-100/90 leading-relaxed">
-                      {liveSlot.category.description}. Kuis ini akan otomatis berganti dengan kuis topik baru dalam{' '}
+                      {liveSlot.category.description}. Soal bervariasi dinamis (10, 15, atau 20 butir) dan otomatis berganti topik baru dalam{' '}
                       <b className="font-mono text-amber-300">{formatCountdown(secondsRemaining)}</b>.
                     </p>
                   </div>
@@ -261,7 +267,7 @@ export function App() {
                       <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 font-semibold text-sm">
                         <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                         <span>
-                          Kamu sudah menyelesaikan sesi ini (+{liveSlot.submission?.score || 0} Poin). Tunggu sesi berikutnya!
+                          Kamu sudah menyelesaikan sesi {totalQuestions} soal ini (+{liveSlot.submission?.score || 0} Poin). Tunggu sesi berikutnya!
                         </span>
                       </div>
                     ) : (
@@ -271,14 +277,14 @@ export function App() {
                         className="h-12 px-6 rounded-2xl bg-white text-indigo-950 hover:bg-neutral-100 font-bold text-sm flex items-center gap-2.5 cursor-pointer pressable shadow-md"
                       >
                         <Play className="w-4 h-4 fill-indigo-950 text-indigo-950" />
-                        <span>Mulai Kerjakan Kuis Sekarang</span>
+                        <span>Mulai Kerjakan {totalQuestions} Soal</span>
                       </button>
                     )}
 
                     {!user && (
                       <p className="text-xs text-indigo-200 flex items-center gap-1">
                         <AlertCircle className="w-3.5 h-3.5" />
-                        Wajib masuk dengan Gmail untuk mencatat skor
+                        Wajib masuk dengan Gmail untuk klaim poin
                       </p>
                     )}
                   </div>
@@ -404,7 +410,7 @@ export function App() {
       {/* Minimal Footer */}
       <footer className="w-full border-t border-black/[0.06] dark:border-white/[0.08] py-6 text-center text-xs text-neutral-500 transition-colors">
         <div className="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <p>© {new Date().getFullYear()} Quiz Pocket. Kuis live rotasi 30 menit & akumulasi skor.</p>
+          <p>© {new Date().getFullYear()} Quiz Pocket. Rotasi kuis dinamis 10, 15, & 20 soal per 30 menit.</p>
           <p className="font-mono text-[11px]">quiz.abdasis.my.id</p>
         </div>
       </footer>

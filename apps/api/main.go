@@ -82,7 +82,7 @@ func main() {
 
 	var qCount int64
 	db.Model(&Question{}).Count(&qCount)
-	if qCount == 0 {
+	if qCount < 50 {
 		seedDatabase(db)
 	}
 
@@ -158,7 +158,7 @@ func main() {
 		return c.JSON(fiber.Map{"success": true, "data": user})
 	})
 
-	// 3. Current Live 30-Minute Slot Query
+	// 3. Current Live 30-Minute Slot Query (Dynamic 10, 15, or 20 questions)
 	api.Get("/live-slot", func(c *fiber.Ctx) error {
 		userEmail := c.Query("email")
 		now := time.Now()
@@ -177,9 +177,17 @@ func main() {
 		catIndex := int(slotID % int64(len(categories)))
 		activeCategory := categories[catIndex]
 
-		// Fetch questions for this category
+		// Dynamic Question Count: 10, 15, or 20 based on slotID cycle
+		countOptions := []int{10, 15, 20}
+		targetCount := countOptions[int(slotID%int64(len(countOptions)))]
+
+		// Fetch questions for this category (or cross categories if needed)
 		var allQuestions []Question
 		db.Where("category_id = ?", activeCategory.ID).Order("id ASC").Find(&allQuestions)
+		if len(allQuestions) < targetCount {
+			// Fallback: mix from other non-IT non-religion categories
+			db.Order("id ASC").Find(&allQuestions)
+		}
 
 		var slotQuestions []Question
 		if len(allQuestions) > 0 {
@@ -187,7 +195,7 @@ func main() {
 			binary.Write(h, binary.BigEndian, slotID)
 			seedBytes := h.Sum(nil)
 
-			count := 5
+			count := targetCount
 			if len(allQuestions) < count {
 				count = len(allQuestions)
 			}
@@ -221,6 +229,7 @@ func main() {
 			"seconds_remaining": secondsRemaining,
 			"category":          activeCategory,
 			"questions":         slotQuestions,
+			"question_count":    len(slotQuestions),
 			"is_completed":      isCompleted,
 			"submission":        submission,
 		})
@@ -315,7 +324,10 @@ func seedDatabase(db *gorm.DB) {
 	}
 
 	for _, c := range categories {
-		db.Create(&c)
+		var existing Category
+		if err := db.Where("slug = ?", c.Slug).First(&existing).Error; err != nil {
+			db.Create(&c)
+		}
 	}
 
 	var catSD, catSMP, catSMA Category
@@ -324,158 +336,77 @@ func seedDatabase(db *gorm.DB) {
 	db.Where("slug = ?", "wawasan-sma").First(&catSMA)
 
 	questions := []Question{
-		// SD Questions
-		{
-			CategoryID:  catSD.ID,
-			Question:    "Hewan apa yang bernapas menggunakan insang saat masih berbentuk berudu, lalu menggunakan paru-paru dan kulit saat dewasa?",
-			Options:     `["Katak", "Ikan Mas", "Kura-kura", "Buaya"]`,
-			AnswerIndex: 0,
-			Explanation: "Katak mengalami metamorfosis: bernapas dengan insang saat berudu, lalu dengan paru-paru dan kulit saat dewasa.",
-			Level:       "SD",
-			Points:      10,
-		},
-		{
-			CategoryID:  catSD.ID,
-			Question:    "Planet terbesar di tata surya kita yang memiliki julukan planet raksasa gas adalah?",
-			Options:     `["Mars", "Saturnus", "Jupiter", "Bumi"]`,
-			AnswerIndex: 2,
-			Explanation: "Jupiter adalah planet terbesar di tata surya dengan diameter lebih dari 11 kali diameter Bumi.",
-			Level:       "SD",
-			Points:      10,
-		},
-		{
-			CategoryID:  catSD.ID,
-			Question:    "Proses pembuatan makanan pada tumbuhan hijau dengan bantuan cahaya matahari dinamakan?",
-			Options:     `["Respirasi", "Fotosintesis", "Fermentasi", "Transpirasi"]`,
-			AnswerIndex: 1,
-			Explanation: "Fotosintesis adalah proses di mana klorofil tumbuhan memanfaatkan sinar matahari untuk mengubah air dan karbon dioksida menjadi glukosa dan oksigen.",
-			Level:       "SD",
-			Points:      10,
-		},
-		{
-			CategoryID:  catSD.ID,
-			Question:    "Bagian darah yang bertugas membekukan darah saat kita terluka agar pendarahan berhenti adalah?",
-			Options:     `["Sel darah merah (Eritrosit)", "Sel darah putih (Leukosit)", "Keping darah (Trombosit)", "Plasma darah"]`,
-			AnswerIndex: 2,
-			Explanation: "Trombosit (keping darah) berfungsi penting dalam proses pembekuan darah untuk menutup luka.",
-			Level:       "SD",
-			Points:      10,
-		},
-		{
-			CategoryID:  catSD.ID,
-			Question:    "Berapa jumlah provinsi di Indonesia saat ini setelah pemekaran wilayah Papua?",
-			Options:     `["34 Provinsi", "36 Provinsi", "38 Provinsi", "40 Provinsi"]`,
-			AnswerIndex: 2,
-			Explanation: "Indonesia memiliki 38 provinsi setelah pembentukan 4 Daerah Otonom Baru (DOB) di wilayah Papua.",
-			Level:       "SD",
-			Points:      10,
-		},
-		{
-			CategoryID:  catSD.ID,
-			Question:    "Garis khayal yang membagi bumi menjadi belahan bumi utara dan selatan disebut garis?",
-			Options:     `["Khatulistiwa (Ekuator)", "Bujur", "Meridian", "Kutub"]`,
-			AnswerIndex: 0,
-			Explanation: "Garis Khatulistiwa (Ekuator) melintasi lintang 0 derajat dan membagi bumi menjadi belahan utara dan selatan.",
-			Level:       "SD",
-			Points:      10,
-		},
+		// SD Level (1-20)
+		{CategoryID: catSD.ID, Question: "Hewan apa yang bernapas menggunakan insang saat berudu, lalu paru-paru dan kulit saat dewasa?", Options: `["Katak", "Ikan Mas", "Kura-kura", "Buaya"]`, AnswerIndex: 0, Explanation: "Katak adalah hewan amfibi yang mengalami metamorfosis.", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Planet terbesar di tata surya kita yang berjuluk raksasa gas adalah?", Options: `["Mars", "Saturnus", "Jupiter", "Bumi"]`, AnswerIndex: 2, Explanation: "Jupiter adalah planet terbesar di tata surya.", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Proses pembuatan makanan pada tumbuhan hijau dengan bantuan cahaya matahari disebut?", Options: `["Respirasi", "Fotosintesis", "Fermentasi", "Transpirasi"]`, AnswerIndex: 1, Explanation: "Fotosintesis mengubah air dan CO2 menjadi glukosa dan O2.", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Bagian darah yang bertugas membekukan darah saat kita terluka adalah?", Options: `["Eritrosit", "Leukosit", "Trombosit", "Plasma"]`, AnswerIndex: 2, Explanation: "Trombosit (keping darah) bertugas menutup luka.", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Berapa jumlah provinsi di Indonesia saat ini setelah pemekaran Papua?", Options: `["34", "36", "38", "40"]`, AnswerIndex: 2, Explanation: "Indonesia saat ini memiliki 38 provinsi.", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Garis khayal yang membagi bumi menjadi belahan utara dan selatan disebut garis?", Options: `["Khatulistiwa", "Bujur", "Meridian", "Kutub"]`, AnswerIndex: 0, Explanation: "Garis Khatulistiwa (Ekuator) berada di lintang 0 derajat.", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Hewan yang memakan tumbuhan dan juga memakan daging disebut?", Options: `["Herbivora", "Karnivora", "Omnivora", "Insektivora"]`, AnswerIndex: 2, Explanation: "Omnivora adalah hewan pemakan segala (tumbuhan dan hewan).", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Mata uang resmi negara Indonesia adalah?", Options: `["Ringgit", "Rupiah", "Dolar", "Peso"]`, AnswerIndex: 1, Explanation: "Rupiah (IDR) adalah mata uang resmi Republik Indonesia.", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Alat untuk mengukur suhu tubuh atau ruangan disebut?", Options: `["Barometer", "Termometer", "Higrometer", "Altimeter"]`, AnswerIndex: 1, Explanation: "Termometer digunakan untuk mengukur derajat panas atau suhu.", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Organ tubuh manusia yang berfungsi memompa darah ke seluruh tubuh adalah?", Options: `["Paru-paru", "Lambung", "Jantung", "Ginjal"]`, AnswerIndex: 2, Explanation: "Jantung memompa darah beroksigen ke seluruh jaringan tubuh.", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Ibu kota Nusantara (IKN) berlokasi di provinsi?", Options: `["Kalimantan Timur", "Kalimantan Tengah", "Kalimantan Selatan", "Kalimantan Barat"]`, AnswerIndex: 0, Explanation: "IKN Nusantara berada di wilayah Penajam Paser Utara & Kutai Kartanegara, Kalimantan Timur.", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Berapa hari jumlah hari dalam satu tahun kabisat?", Options: `["364 Hari", "365 Hari", "366 Hari", "367 Hari"]`, AnswerIndex: 2, Explanation: "Tahun kabisat memiliki 366 hari dengan tambahan 1 hari di tanggal 29 Februari.", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Perubahan wujud benda padat menjadi gas tanpa melalui fase cair disebut?", Options: `["Mencair", "Menguap", "Menyublim", "Mengembun"]`, AnswerIndex: 2, Explanation: "Menyublim adalah perubahan wujud dari padat langsung menjadi gas (contoh: kapur barus).", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Burung Cendrawasih adalah fauna khas dari daerah?", Options: `["Sumatera", "Jawa", "Sulawesi", "Papua"]`, AnswerIndex: 3, Explanation: "Burung Cendrawasih adalah burung endemik tanah Papua.", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Warna sekunder yang dihasilkan dari percampuran warna merah dan kuning adalah?", Options: `["Hijau", "Oranye (Jingga)", "Ungu", "Cokelat"]`, AnswerIndex: 1, Explanation: "Merah + Kuning = Oranye.", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Benda langit yang mengelilingi matahari dan memiliki ekor bercahaya saat mendekati matahari adalah?", Options: `["Asteroid", "Komet", "Meteoroid", "Satelit"]`, AnswerIndex: 1, Explanation: "Komet (bintang berekor) tersusun atas es dan debu yang menguap membentuk ekor gas.", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Berapa jumlah sisi pada bangun ruang kubus?", Options: `["4 Sisi", "6 Sisi", "8 Sisi", "12 Sisi"]`, AnswerIndex: 1, Explanation: "Kubus memiliki 6 sisi berbentuk persegi yang kongruen.", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Tanaman kaktus menyimpan cadangan airnya di bagian?", Options: `["Daun", "Batang", "Akar", "Bunga"]`, AnswerIndex: 1, Explanation: "Batang kaktus berdaging tebal untuk menyimpan air di lingkungan kering/gurun.", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Simbol sila ketiga Pancasila adalah?", Options: `["Bintang", "Rantai", "Pohon Beringin", "Padi dan Kapas"]`, AnswerIndex: 2, Explanation: "Pohon Beringin melambangkan persatuan Indonesia (sila ke-3).", Level: "SD", Points: 10},
+		{CategoryID: catSD.ID, Question: "Bunyi tidak dapat merambat di dalam?", Options: `["Air", "Udara", "Besi", "Ruang Hampa Udara"]`, AnswerIndex: 3, Explanation: "Gelombang bunyi adalah gelombang mekanik yang memerlukan medium rambat.", Level: "SD", Points: 10},
 
-		// SMP Questions
-		{
-			CategoryID:  catSMP.ID,
-			Question:    "Selat yang memisahkan antara Pulau Jawa dan Pulau Sumatera adalah?",
-			Options:     `["Selat Malaka", "Selat Sunda", "Selat Bali", "Selat Makassar"]`,
-			AnswerIndex: 1,
-			Explanation: "Selat Sunda adalah selat penghubung antara Laut Jawa dan Samudra Hindia yang memisahkan Pulau Jawa dan Sumatera.",
-			Level:       "SMP",
-			Points:      10,
-		},
-		{
-			CategoryID:  catSMP.ID,
-			Question:    "Peristiwa proklamasi kemerdekaan Indonesia pada tanggal 17 Agustus 1945 dibacakan di Jalan?",
-			Options:     `["Pegangsaan Timur No. 56", "Imam Bonjol No. 1", "Medan Merdeka Barat", "Salemba Raya No. 4"]`,
-			AnswerIndex: 0,
-			Explanation: "Naskah proklamasi dibacakan oleh Ir. Soekarno di kediamannya di Jalan Pegangsaan Timur No. 56, Jakarta Pusat.",
-			Level:       "SMP",
-			Points:      10,
-		},
-		{
-			CategoryID:  catSMP.ID,
-			Question:    "Mengapa rel kereta api selalu diberi celah kecil di antara sambungan batangnya?",
-			Options:     `["Mengurangi kebisingan roda", "Memberi ruang pemuaian rel saat suhu panas", "Mempermudah pergantian rel", "Mencegah kereta tergelincir"]`,
-			AnswerIndex: 1,
-			Explanation: "Besi rel memuai saat terkena panas matahari. Celah dibuat agar rel tidak membengkok akibat pemuaian.",
-			Level:       "SMP",
-			Points:      10,
-		},
-		{
-			CategoryID:  catSMP.ID,
-			Question:    "Danau vulkanik terbesar di Indonesia sekaligus di Asia Tenggara adalah?",
-			Options:     `["Danau Singkarak", "Danau Poso", "Danau Toba", "Danau Matano"]`,
-			AnswerIndex: 2,
-			Explanation: "Danau Toba di Sumatera Utara merupakan danau hasil letusan supervolcano terbesar di dunia.",
-			Level:       "SMP",
-			Points:      10,
-		},
-		{
-			CategoryID:  catSMP.ID,
-			Question:    "Hukum gerak benda yang menyatakan bahwa setiap aksi akan menimbulkan reaksi yang sama besar dan berlawanan arah adalah?",
-			Options:     `["Hukum Newton I", "Hukum Newton II", "Hukum Newton III", "Hukum Archimedes"]`,
-			AnswerIndex: 2,
-			Explanation: "Hukum Newton III menyatakan F_aksi = -F_reaksi (gaya aksi selalu berpasangan dengan gaya reaksi berlawanan).",
-			Level:       "SMP",
-			Points:      10,
-		},
+		// SMP Level (21-40)
+		{CategoryID: catSMP.ID, Question: "Selat yang memisahkan Pulau Jawa dan Sumatera adalah?", Options: `["Selat Malaka", "Selat Sunda", "Selat Bali", "Selat Makassar"]`, AnswerIndex: 1, Explanation: "Selat Sunda menghubungkan Laut Jawa dan Samudra Hindia.", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Naskah proklamasi kemerdekaan RI dibacakan di Jalan?", Options: `["Pegangsaan Timur No. 56", "Imam Bonjol No. 1", "Merdeka Barat", "Salemba Raya"]`, AnswerIndex: 0, Explanation: "Dibacakan di Jalan Pegangsaan Timur No. 56, Jakarta Pusat.", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Mengapa rel kereta api diberi celah pada sambungannya?", Options: `["Redam suara", "Ruang pemuaian saat panas", "Mempermudah perbaikan", "Anti slip"]`, AnswerIndex: 1, Explanation: "Celah memberi ruang muai agar rel tidak melengkung saat terik panas.", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Danau vulkanik terbesar di Asia Tenggara adalah?", Options: `["Danau Singkarak", "Danau Poso", "Danau Toba", "Danau Matano"]`, AnswerIndex: 2, Explanation: "Danau Toba di Sumatera Utara adalah danau kaldera vulkanik terbesar.", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Hukum Newton yang menyatakan aksi sama dengan reaksi berlawanan arah adalah?", Options: `["Hukum Newton I", "Hukum Newton II", "Hukum Newton III", "Hukum Archimedes"]`, AnswerIndex: 2, Explanation: "Hukum Newton III: F aksi = -F reaksi.", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Organ tubuh yang berfungsi menyaring racun dan memproduksi cairan empedu adalah?", Options: `["Pankreas", "Hati (Liver)", "Ginjal", "Limpa"]`, AnswerIndex: 1, Explanation: "Hati menyaring racun dari darah dan menghasilkan empedu untuk pencernaan lemak.", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Pemberontakan VOC di Jawa yang dipimpin Pangeran Diponegoro terjadi pada tahun?", Options: `["1800-1805", "1825-1830", "1901-1905", "1942-1945"]`, AnswerIndex: 1, Explanation: "Perang Jawa (Diponegoro) berlangsung dari tahun 1825 hingga 1830.", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Lapisan atmosfer bumi tempat terjadinya fenomena cuaca seperti hujan dan awan adalah?", Options: `["Troposfer", "Stratosfer", "Mesosfer", "Termosfer"]`, AnswerIndex: 0, Explanation: "Troposfer adalah lapisan atmosfer paling bawah tempat semua fenomena cuaca terjadi.", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Rumus luas permukaan lingkaran dengan jari-jari r adalah?", Options: `["2 × π × r", "π × r²", "4 × π × r²", "½ × π × r"]`, AnswerIndex: 1, Explanation: "Luas lingkaran dihitung dengan rumus π × r².", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Jenis batuan yang terbentuk dari pembekuan magma atau lava yang keluar dari gunung berapi adalah?", Options: `["Batuan Sedimen", "Batuan Beku", "Batuan Metamorf", "Batuan Kapur"]`, AnswerIndex: 1, Explanation: "Batuan beku (igneous rock) terbentuk dari pendinginan magma atau lava.", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Organ pernapasan manusia tempat terjadinya pertukaran oksigen dan karbon dioksida adalah?", Options: `["Trakea", "Bronkus", "Alveolus", "Laring"]`, AnswerIndex: 2, Explanation: "Alveolus adalah gelembung udara di paru-paru tempat difusi O2 dan CO2.", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Pegunungan tertinggi di dunia yang memiliki puncak Gunung Everest adalah?", Options: `["Pegunungan Andes", "Pegunungan Rocky", "Pegunungan Himalaya", "Pegunungan Alpen"]`, AnswerIndex: 2, Explanation: "Pegunungan Himalaya membentang di Asia dan memiliki puncak tertinggi Everest (8.848 m).", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Berapa kecepatan cahaya dalam ruang hampa secara pendekatan?", Options: `["300.000 m/detik", "300.000 km/detik", "3.000 km/detik", "30.000 km/jam"]`, AnswerIndex: 1, Explanation: "Kecepatan rambat cahaya di ruang hampa adalah sekitar 3 × 10^8 m/s (300.000 km/detik).", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Prasasti Yupa dari Kerajaan Kutai di Kalimantan Timur ditulis menggunakan huruf?", Options: `["Hieroglif", "Pallawa", "Kawi", "Latin"]`, AnswerIndex: 1, Explanation: "Prasasti Kerajaan Kutai menggunakan huruf Pallawa dan bahasa Sanskerta.", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Senyawa kimia garam dapur yang sering digunakan memasak memiliki rumus molekul?", Options: `["H2O", "NaCl", "CO2", "CaCO3"]`, AnswerIndex: 1, Explanation: "Garam dapur adalah Natrium Klorida (NaCl).", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Gunung tertinggi di pulau Jawa adalah?", Options: `["Gunung Merapi", "Gunung Semeru", "Gunung Bromo", "Gunung Slamet"]`, AnswerIndex: 1, Explanation: "Gunung Semeru (Puncak Mahameru) setinggi 3.676 mdpl adalah puncak tertinggi di Jawa.", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Energi yang tersimpan pada suatu benda karena kedudukan atau ketinggiannya disebut?", Options: `["Energi Kinetik", "Energi Potensial", "Energi Kimia", "Energi Panas"]`, AnswerIndex: 1, Explanation: "Energi Potensial Gravitasi (Ep = m × g × h) bergantung pada posisi/ketinggian benda.", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Batas laut teritorial Indonesia yang diakui secara internasional sejauh berapa mil laut dari garis pantai?", Options: `["3 Mil", "12 Mil", "24 Mil", "200 Mil"]`, AnswerIndex: 1, Explanation: "Batas laut teritorial Indonesia adalah 12 mil laut dari garis pangkal kepulauan.", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Pembelahan sel pada tubuh untuk pertumbuhan dan perbaikan jaringan tubuh yang rusak disebut?", Options: `["Mitosis", "Meiosis", "Amitosis", "Fertilisasi"]`, AnswerIndex: 0, Explanation: "Mitosis menghasilkan 2 sel anakan identik untuk perbanyakan dan perbaikan sel tubuh.", Level: "SMP", Points: 10},
+		{CategoryID: catSMP.ID, Question: "Titik beku air murni pada tekanan standar 1 atmosfer berada pada suhu?", Options: `["0° Celcius", "32° Celcius", "100° Celcius", "-4° Celcius"]`, AnswerIndex: 0, Explanation: "Air murni membeku pada suhu 0°C dan mendidih pada 100°C.", Level: "SMP", Points: 10},
 
-		// SMA Questions
-		{
-			CategoryID:  catSMA.ID,
-			Question:    "Kenaikan harga barang dan jasa secara umum dan terus menerus dalam jangka waktu tertentu dalam istilah ekonomi disebut?",
-			Options:     `["Deflasi", "Inflasi", "Devaluasi", "Resesi"]`,
-			AnswerIndex: 1,
-			Explanation: "Inflasi adalah kecenderungan naiknya harga kebutuhan pokok dan barang/jasa secara umum yang menurunkan daya beli uang.",
-			Level:       "SMA",
-			Points:      10,
-		},
-		{
-			CategoryID:  catSMA.ID,
-			Question:    "Mengapa rem kendaraan bermotor lebih cepat terasa panas dan aus saat menuruni jalan pegunungan yang curam?",
-			Options:     `["Gesekan mengubah energi kinetik menjadi energi termal (panas)", "Udara di pegunungan lebih tipis", "Gravitasi merusak piringan rem", "Minyak rem mudah menguap"]`,
-			AnswerIndex: 0,
-			Explanation: "Berdasarkan hukum kekekalan energi, sistem pengereman meredam laju kendaraan dengan mengubah energi gerak (kinetik) menjadi energi panas (termal) melalui gesekan.",
-			Level:       "SMA",
-			Points:      10,
-		},
-		{
-			CategoryID:  catSMA.ID,
-			Question:    "Manakah konsep pengelolaan keuangan pribadi yang membagi penghasilan menjadi 50% Kebutuhan Pokok, 30% Keinginan, dan 20% Tabungan/Investasi?",
-			Options:     `["Aturan Pareto 80/20", "Metode 50/30/20", "Aturan 70/20/10", "Zero-Based Budgeting"]`,
-			AnswerIndex: 1,
-			Explanation: "Metode budgeting 50/30/20 dipopulerkan untuk menjaga kesehatan arus kas pribadi antara kebutuhan harian dan masa depan.",
-			Level:       "SMA",
-			Points:      10,
-		},
-		{
-			CategoryID:  catSMA.ID,
-			Question:    "Gas rumah kaca di atmosfer yang paling banyak dihasilkan dari pembakaran bahan bakar fosil oleh kendaraan dan industri adalah?",
-			Options:     `["Oksigen (O2)", "Karbon Dioksida (CO2)", "Helium (He)", "Nitrogen (N2)"]`,
-			AnswerIndex: 1,
-			Explanation: "Karbon Dioksida (CO2) adalah gas buang utama pembakaran fosil yang memerangkap panas di atmosfer dan memicu pemanasan global.",
-			Level:       "SMA",
-			Points:      10,
-		},
-		{
-			CategoryID:  catSMA.ID,
-			Question:    "Saat berenang di laut, tubuh kita terasa lebih mudah mengapung dibandingkan di kolam renang air tawar. Mengapa?",
-			Options:     `["Air laut memiliki massa jenis lebih tinggi karena kandungan garam", "Suhu air laut lebih hangat", "Ombak laut mendorong tubuh ke atas", "Tekanan udara di pantai lebih rendah"]`,
-			AnswerIndex: 0,
-			Explanation: "Sesuai hukum Archimedes, gaya apung berbanding lurus dengan massa jenis zat cair. Air garam memiliki massa jenis lebih besar daripada air tawar.",
-			Level:       "SMA",
-			Points:      10,
-		},
+		// SMA Level (41-60)
+		{CategoryID: catSMA.ID, Question: "Kenaikan harga barang dan jasa secara umum dan terus menerus disebut?", Options: `["Deflasi", "Inflasi", "Devaluasi", "Resesi"]`, AnswerIndex: 1, Explanation: "Inflasi menurunkan daya beli uang terhadap barang dan jasa.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Mengapa rem kendaraan panas saat menuruni jalan pegunungan curam?", Options: `["Gesekan ubah energi kinetik jadi panas", "Udara tipis", "Gravitasi rusak rem", "Minyak rem menguap"]`, AnswerIndex: 0, Explanation: "Energi kinetik laju roda diubah menjadi energi termal (panas) akibat gesekan kampas.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Metode budgeting yang membagi 50% Kebutuhan, 30% Keinginan, 20% Tabungan disebut?", Options: `["Pareto 80/20", "Metode 50/30/20", "Aturan 70/20/10", "Zero-Based"]`, AnswerIndex: 1, Explanation: "Metode 50/30/20 dirancang untuk menjaga alokasi pendapatan ideal.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Gas rumah kaca utama buangan pembakaran fosil pemicu pemanasan global adalah?", Options: `["O2", "CO2", "He", "N2"]`, AnswerIndex: 1, Explanation: "Karbon Dioksida (CO2) adalah kontributor terbesar efek rumah kaca buatan manusia.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Mengapa tubuh lebih mudah mengapung di air laut dibanding air tawar?", Options: `["Massa jenis air laut lebih besar", "Suhu lebih hangat", "Dorongan ombak", "Tekanan udara rendah"]`, AnswerIndex: 0, Explanation: "Gaya apung Archimedes sebanding dengan densitas cairan. Air laut lebih padat.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Penurunan nilai mata uang domestik terhadap mata uang asing akibat kebijakan pemerintah disebut?", Options: `["Apresiasi", "Depresiasi", "Devaluasi", "Revaluasi"]`, AnswerIndex: 2, Explanation: "Devaluasi adalah kebijakan penurunan resmi nilai mata uang terhadap mata uang asing.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Mengapa menyiram tanaman di siang hari bolong saat terik matahari tidak disarankan?", Options: `["Air cepat menguap & butiran air memfokuskan panas seperti lensa", "Akar tanaman tidur", "Tanaman menolak air", "Air menjadi beracun"]`, AnswerIndex: 0, Explanation: "Butiran air di daun dapat berfungsi seperti lensa pembesar yang membakar jaringan daun.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Instrumen investasi pasar modal yang menunjukkan bukti kepemilikan sebagian atas suatu perusahaan adalah?", Options: `["Obligasi", "Saham", "Deposito", "Surat Utang Negara"]`, AnswerIndex: 1, Explanation: "Saham merupakan bukti penyertaan modal atau kepemilikan atas sebuah perseroan.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Organel sel yang sering disebut 'pembangkit tenaga sel' (powerhouse of cell) adalah?", Options: `["Ribosom", "Mitokondria", "Lisosom", "Badan Golgi"]`, AnswerIndex: 1, Explanation: "Mitokondria menghasilkan sebagian besar pasokan adenosin trifosfat (ATP) sebagai energi sel.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Prinsip ekonomi yang menyatakan bahwa semakin banyak barang diproduksi, semakin rendah biaya rata-rata per unit disebut?", Options: `["Opportunity Cost", "Economies of Scale (Skala Ekonomis)", "Law of Diminishing Return", "Invisble Hand"]`, AnswerIndex: 1, Explanation: "Skala ekonomis terjadi ketika efisiensi biaya tercapai seiring peningkatan volume produksi.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Mengapa langit siang hari terlihat berwarna biru?", Options: `["Pantulan warna air laut", "Hamburan Rayleigh cahaya matahari oleh partikel udara", "Lapisan ozon berwarna biru", "Matahari memancarkan sinar biru saja"]`, AnswerIndex: 1, Explanation: "Hamburan Rayleigh menyebabkan gelombang cahaya berfrekuensi tinggi (biru) terhambur ke segala arah.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Biaya yang timbul karena memilih satu alternatif terbaik dan mengorbankan alternatif lainnya dinamakan?", Options: `["Biaya Tetap", "Biaya Peluang (Opportunity Cost)", "Biaya Marginal", "Biaya Variabel"]`, AnswerIndex: 1, Explanation: "Opportunity cost adalah nilai dari potensi manfaat yang hilang ketika memilih satu opsi atas opsi lain.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Zat pengawet alami yang sering digunakan dalam proses pengasapan atau pembuatan ikan asin adalah?", Options: `["Formalin", "Garam (NaCl)", "Boraks", "Tawas"]`, AnswerIndex: 1, Explanation: "Garam menyerap air dari sel bakteri melalui osmosis sehingga mikroba perusak tidak bisa berkembang.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Hukum termodinamika yang menyatakan bahwa energi tidak dapat diciptakan atau dimusnahkan adalah?", Options: `["Hukum Termodinamika I", "Hukum Termodinamika II", "Hukum Termodinamika III", "Hukum Termodinamika Ke-Nol"]`, AnswerIndex: 0, Explanation: "Hukum I Termodinamika adalah hukum kekekalan energi (energi hanya dapat berubah bentuk).", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Kondisi di mana pertumbuhan ekonomi stagnan atau melambat disertai dengan tingkat inflasi yang tinggi disebut?", Options: `["Stagflasi", "Hiperinflasi", "Deflasi", "Depresi Ekonomi"]`, AnswerIndex: 0, Explanation: "Stagflasi merupakan gabungan dari stagnansi pertumbuhan ekonomi dan inflasi tinggi.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Mengapa saat menyetir di jalan beraspal panas di kejauhan tampak seperti ada genangan air (fatamorgana)?", Options: `["Pembiasan cahaya akibat perbedaan kerapatan udara panas dan dingin", "Halusinasi pengemudi", "Uap air mengembun di jalan", "Aspal mencair"]`, AnswerIndex: 0, Explanation: "Fatamorgana terjadi akibat pembiasan/refraksi cahaya matahari saat melewati lapisan udara dengan gradien suhu berbeda.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Zat dalam tubuh yang berfungsi mempercepat reaksi kimia biologis tanpa ikut terpakai habis adalah?", Options: `["Enzim", "Hormon", "Lipid", "Glukosa"]`, AnswerIndex: 0, Explanation: "Enzim adalah biokatalisator yang mempercepat laju reaksi biologis di dalam organisme.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Indikator makroekonomi yang mengukur nilai total seluruh barang dan jasa yang diproduksi di suatu negara dalam periode tertentu adalah?", Options: `["IHSG", "PDB (Produk Domestik Bruto)", "APBN", "Neraca Pembayaran"]`, AnswerIndex: 1, Explanation: "PDB (GDP) adalah ukuran moneter utama aktivitas perekonomian suatu negara.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Manakah tindakan pertolongan pertama yang benar saat seseorang mengalami luka bakar ringan terkena minyak panas?", Options: `["Mengoleskan pasta gigi (odol)", "Mengoleskan mentega", "Mengalirkan air bersih suhu ruang selama 10-20 menit", "Memecahkan gelembung luka"]`, AnswerIndex: 2, Explanation: "Luka bakar ringan harus dialiri air mengalir sejuk (bukan es) untuk meredakan panas jaringan kulit secara aman.", Level: "SMA", Points: 10},
+		{CategoryID: catSMA.ID, Question: "Konsep psikologi finansial di mana seseorang lebih takut kehilangan Rp100.000 daripada senang saat mendapatkan Rp100.000 disebut?", Options: `["Loss Aversion", "Confirmation Bias", "Sunk Cost Fallacy", "Anchoring Effect"]`, AnswerIndex: 0, Explanation: "Loss Aversion menyatakan rasa sakit psikologis akibat kerugian terasa sekitar dua kali lipat dibanding kenikmatan keuntungan sepadan.", Level: "SMA", Points: 10},
 	}
 
 	for _, q := range questions {
-		db.Create(&q)
+		var existing Question
+		if err := db.Where("question = ?", q.Question).First(&existing).Error; err != nil {
+			db.Create(&q)
+		}
 	}
 }
