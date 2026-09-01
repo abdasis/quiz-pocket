@@ -261,13 +261,14 @@ func main() {
 		db.Where("level = ?", "SMP").Order("id ASC").Find(&smpQuestions)
 		db.Where("level = ?", "SMA").Order("id ASC").Find(&smaQuestions)
 
+		// Komposisi Soal: 40% SD, 40% SMP, 20% SMA
 		var countSD, countSMP, countSMA int
 		if targetCount == 10 {
-			countSD, countSMP, countSMA = 4, 3, 3
+			countSD, countSMP, countSMA = 4, 4, 2 // 40% SD, 40% SMP, 20% SMA
 		} else if targetCount == 15 {
-			countSD, countSMP, countSMA = 5, 5, 5
+			countSD, countSMP, countSMA = 6, 6, 3 // 40% SD, 40% SMP, 20% SMA
 		} else {
-			countSD, countSMP, countSMA = 7, 7, 6
+			countSD, countSMP, countSMA = 8, 8, 4 // 40% SD, 40% SMP, 20% SMA
 		}
 
 		var slotQuestions []Question
