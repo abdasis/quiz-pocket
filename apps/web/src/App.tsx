@@ -95,7 +95,16 @@ export function App() {
   const [currentWeekKey, setCurrentWeekKey] = useState<string>('')
 
   // Push Notification State (OneSignal)
-  const [isNotificationEnabled, setIsNotificationEnabled] = useState(false)
+  const [isNotificationEnabled, setIsNotificationEnabled] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('quiz_pocket_push_opted_in')
+      if (saved === 'true') return true
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && saved !== 'false') {
+        return true
+      }
+    }
+    return false
+  })
 
   // OneSignal Init on Mount
   useEffect(() => {
