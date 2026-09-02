@@ -7,6 +7,7 @@ import { LoginModal } from './login-modal'
 import { StatsModal } from './stats-modal'
 import { SessionHistoryModal } from './session-history-modal'
 import { EditProfileModal } from './edit-profile-modal'
+import { initOneSignal, togglePushSubscription } from './onesignal-service'
 import { getUserTitle } from './user-ranks'
 import { 
   Trophy, 
@@ -92,6 +93,22 @@ export function App() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([])
   const [leaderboardTab, setLeaderboardTab] = useState<'weekly' | 'alltime'>('weekly')
   const [currentWeekKey, setCurrentWeekKey] = useState<string>('')
+
+  // Push Notification State (OneSignal)
+  const [isNotificationEnabled, setIsNotificationEnabled] = useState(false)
+
+  // OneSignal Init on Mount
+  useEffect(() => {
+    initOneSignal((subscribed) => {
+      setIsNotificationEnabled(subscribed)
+    })
+  }, [])
+
+  const handleToggleNotification = async () => {
+    const nextState = !isNotificationEnabled
+    const result = await togglePushSubscription(nextState)
+    setIsNotificationEnabled(result)
+  }
 
   // Theme Sync
   useEffect(() => {
@@ -254,6 +271,8 @@ export function App() {
           setUser(null)
           localStorage.removeItem('quiz_pocket_user')
         }}
+        isNotificationEnabled={isNotificationEnabled}
+        onToggleNotification={handleToggleNotification}
       />
 
       <main className="flex-1 w-full max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-6">

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
@@ -508,6 +509,41 @@ func main() {
 				QuestionsPayload: string(payloadJSON),
 			}
 			db.Create(&sessionRecord)
+
+			// Kirim push notification OneSignal ke subscriber sesi baru secara background asynchronous
+			go func(newSlotID int64) {
+				appID := os.Getenv("ONESIGNAL_APP_ID")
+				apiKey := os.Getenv("ONESIGNAL_API_KEY")
+				if appID == "" {
+					appID = "d30c5e7b-8bb7-4f65-8b36-9d0426b38466"
+				}
+				if apiKey != "" {
+					payload := map[string]interface{}{
+						"app_id":             appID,
+						"included_segments":  []string{"Subscribed Users", "Total Subscriptions"},
+						"headings": map[string]string{
+							"en": "Sesi Kuis Baru Dimulai! 🎯",
+							"id": "Sesi Kuis Baru Dimulai! 🎯",
+						},
+						"contents": map[string]string{
+							"en": fmt.Sprintf("Sesi #%d telah aktif dengan paket 10 soal baru. Uji wawasanmu sekarang!", newSlotID),
+							"id": fmt.Sprintf("Sesi #%d telah aktif dengan paket 10 soal baru. Uji wawasanmu sekarang!", newSlotID),
+						},
+						"url": "https://quiz.abdasis.my.id",
+					}
+					jsonBody, _ := json.Marshal(payload)
+					req, err := http.NewRequest("POST", "https://onesignal.com/api/v1/notifications", bytes.NewBuffer(jsonBody))
+					if err == nil {
+						req.Header.Set("Content-Type", "application/json")
+						req.Header.Set("Authorization", "Key "+apiKey)
+						client := &http.Client{Timeout: 10 * time.Second}
+						resp, err := client.Do(req)
+						if err == nil {
+							defer resp.Body.Close()
+						}
+					}
+				}
+			}(slotID)
 		}
 
 		// Cek apakah user yang sedang login sudah pernah submit di slot ini

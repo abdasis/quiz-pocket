@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Trophy, Flame, Moon, Sun, ArrowLeft, LogIn, LogOut, Award, BarChart2, UserCog } from 'lucide-react'
+import { Trophy, Flame, Moon, Sun, ArrowLeft, LogIn, LogOut, Award, BarChart2, UserCog, Bell, BellOff } from 'lucide-react'
 
 export interface AuthUser {
   id: number
@@ -33,6 +33,8 @@ interface AppHeaderProps {
   user: AuthUser | null
   onOpenLogin: () => void
   onLogout: () => void
+  isNotificationEnabled?: boolean
+  onToggleNotification?: () => void
 }
 
 export function AppHeader({
@@ -45,6 +47,8 @@ export function AppHeader({
   user,
   onOpenLogin,
   onLogout,
+  isNotificationEnabled = false,
+  onToggleNotification,
 }: AppHeaderProps) {
   const [showUserMenu, setShowUserMenu] = useState(false)
 
@@ -113,6 +117,25 @@ export function AppHeader({
               </span>
             )}
           </div>
+
+          {/* Notification Toggle Button */}
+          {onToggleNotification && (
+            <button
+              onClick={onToggleNotification}
+              className={`h-8 w-8 sm:h-10 sm:w-10 rounded-xl sm:rounded-2xl border flex items-center justify-center cursor-pointer pressable transition-all ${
+                isNotificationEnabled
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400'
+                  : 'bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] border-black/[0.06] dark:border-white/[0.08] text-neutral-400 dark:text-neutral-500'
+              }`}
+              title={isNotificationEnabled ? 'Pemberitahuan Sesi Baru Aktif' : 'Aktifkan Pemberitahuan Sesi Baru'}
+            >
+              {isNotificationEnabled ? (
+                <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-amber-500/20" />
+              ) : (
+                <BellOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              )}
+            </button>
+          )}
 
           {/* Theme Switcher Button */}
           <button
