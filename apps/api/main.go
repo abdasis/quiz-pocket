@@ -143,7 +143,7 @@ type Article struct {
 }
 
 // Helper untuk permutasi Fisher-Yates per siklus (non-repeating deterministic cycle)
-func getLevelPermutation(totalQuestions int, slotID int64, seedOffset byte) []int {
+func getLevelPermutation(totalQuestions int, cycle int64, seedOffset byte) []int {
 	if totalQuestions == 0 {
 		return []int{}
 	}
@@ -152,15 +152,15 @@ func getLevelPermutation(totalQuestions int, slotID int64, seedOffset byte) []in
 		perm[i] = i
 	}
 	// Siklus permutasi unik tiap putaran bank soal
-	cycle := slotID / int64(totalQuestions)
 	h := sha256.New()
 	binary.Write(h, binary.BigEndian, cycle)
-	h.Write([]byte{seedOffset})
+	h.Write([]byte{seedOffset, 0x5a, 0x3c})
 	cycleSeed := h.Sum(nil)
 
 	// Fisher-Yates Shuffle murni menggunakan seed siklus
 	for i := totalQuestions - 1; i > 0; i-- {
-		j := int(cycleSeed[(int(seedOffset)+i)%len(cycleSeed)]) % (i + 1)
+		idx := (int(seedOffset) + i) % len(cycleSeed)
+		j := int(cycleSeed[idx]) % (i + 1)
 		perm[i], perm[j] = perm[j], perm[i]
 	}
 	return perm
@@ -181,23 +181,8 @@ func getLiveSlotQuestions(db *gorm.DB) []Question {
 		}
 	}
 
-	// Generate deterministic jika belum ada record snapshot
-	h := sha256.New()
-	binary.Write(h, binary.BigEndian, slotID)
-	seedBytes := h.Sum(nil)
-
-	countOptions := []int{10, 15, 20}
-	randomIndex := int(seedBytes[3]) % len(countOptions)
-	targetCount := countOptions[randomIndex]
-
-	var countSD, countSMP, countSMA int
-	if targetCount == 10 {
-		countSD, countSMP, countSMA = 4, 4, 2
-	} else if targetCount == 15 {
-		countSD, countSMP, countSMA = 6, 6, 3
-	} else {
-		countSD, countSMP, countSMA = 8, 8, 4
-	}
+	// Dynamic Question Count: Kunci 10 butir per slot (4 SD, 4 SMP, 2 SMA)
+	countSD, countSMP, countSMA := 4, 4, 2
 
 	var sdQuestions, smpQuestions, smaQuestions []Question
 	db.Where("level = ?", "SD").Order("id ASC").Find(&sdQuestions)
@@ -206,18 +191,21 @@ func getLiveSlotQuestions(db *gorm.DB) []Question {
 
 	var slotQuestions []Question
 
-	// Kombinasi Fisher-Yates Shuffle deterministik slot hash + non-repeating cycle window
+	// Zero-Repetition Continuous Stream: Memastikan semua soal dalam bank soal muncul tepat 1 kali per siklus
 	pickQuestionsDeterministic := func(list []Question, count int, seedOffset byte) {
 		n := len(list)
-		if n == 0 {
+		if n == 0 || count <= 0 {
 			return
 		}
-		perm := getLevelPermutation(n, slotID, seedOffset)
-		startIdx := int((slotID * int64(count)) % int64(n))
+		globalPos := slotID * int64(count)
 
 		for i := 0; i < count; i++ {
-			idx := (startIdx + i) % n
-			q := list[perm[idx]]
+			pos := globalPos + int64(i)
+			cycle := pos / int64(n)
+			posInCycle := int(pos % int64(n))
+
+			perm := getLevelPermutation(n, cycle, seedOffset)
+			q := list[perm[posInCycle]]
 
 			var opts []string
 			if err := json.Unmarshal([]byte(q.Options), &opts); err == nil {
@@ -233,11 +221,15 @@ func getLiveSlotQuestions(db *gorm.DB) []Question {
 		}
 	}
 
-	pickQuestionsDeterministic(sdQuestions, countSD, seedBytes[0])
-	pickQuestionsDeterministic(smpQuestions, countSMP, seedBytes[1])
-	pickQuestionsDeterministic(smaQuestions, countSMA, seedBytes[2])
+	pickQuestionsDeterministic(sdQuestions, countSD, 0x11)
+	pickQuestionsDeterministic(smpQuestions, countSMP, 0x22)
+	pickQuestionsDeterministic(smaQuestions, countSMA, 0x33)
 
-	// Final Fisher-Yates cross-level shuffle agar jenjang tersebar merata
+	// Final Fisher-Yates cross-level shuffle deterministik per slotID
+	h := sha256.New()
+	binary.Write(h, binary.BigEndian, slotID)
+	seedBytes := h.Sum(nil)
+
 	for i := len(slotQuestions) - 1; i > 0; i-- {
 		j := int(seedBytes[(i*7)%len(seedBytes)]) % (i + 1)
 		slotQuestions[i], slotQuestions[j] = slotQuestions[j], slotQuestions[i]
@@ -444,24 +436,8 @@ func main() {
 		catIndex := int(slotID % int64(len(categories)))
 		activeCategory := categories[catIndex]
 
-		// Dynamic Pseudo-Random Question Count using Slot Hash (10, 15, or 20 secara acak)
-		h := sha256.New()
-		binary.Write(h, binary.BigEndian, slotID)
-		seedBytes := h.Sum(nil)
-
-		countOptions := []int{10, 15, 20}
-		randomIndex := int(seedBytes[3]) % len(countOptions)
-		targetCount := countOptions[randomIndex]
-
-		// Komposisi Soal: 40% SD, 40% SMP, 20% SMA
-		var countSD, countSMP, countSMA int
-		if targetCount == 10 {
-			countSD, countSMP, countSMA = 4, 4, 2 // 40% SD, 40% SMP, 20% SMA
-		} else if targetCount == 15 {
-			countSD, countSMP, countSMA = 6, 6, 3 // 40% SD, 40% SMP, 20% SMA
-		} else {
-			countSD, countSMP, countSMA = 8, 8, 4 // 40% SD, 40% SMP, 20% SMA
-		}
+		// Komposisi Soal: 4 SD, 4 SMP, 2 SMA (Total 10 soal per slot)
+		countSD, countSMP, countSMA := 4, 4, 2
 
 		var sdQuestions, smpQuestions, smaQuestions []Question
 		db.Where("level = ?", "SD").Order("id ASC").Find(&sdQuestions)
@@ -471,18 +447,21 @@ func main() {
 		var slotQuestions []Question
 		var questionIDs []uint
 
-		// Kombinasi Fisher-Yates Shuffle deterministik slot hash + non-repeating cycle window
+		// Zero-Repetition Continuous Stream: Memastikan semua soal dalam bank soal muncul tepat 1 kali per siklus
 		pickQuestionsDeterministic := func(list []Question, count int, seedOffset byte) {
 			n := len(list)
-			if n == 0 {
+			if n == 0 || count <= 0 {
 				return
 			}
-			perm := getLevelPermutation(n, slotID, seedOffset)
-			startIdx := int((slotID * int64(count)) % int64(n))
+			globalPos := slotID * int64(count)
 
 			for i := 0; i < count; i++ {
-				idx := (startIdx + i) % n
-				q := list[perm[idx]]
+				pos := globalPos + int64(i)
+				cycle := pos / int64(n)
+				posInCycle := int(pos % int64(n))
+
+				perm := getLevelPermutation(n, cycle, seedOffset)
+				q := list[perm[posInCycle]]
 
 				var opts []string
 				if err := json.Unmarshal([]byte(q.Options), &opts); err == nil {
@@ -499,11 +478,15 @@ func main() {
 			}
 		}
 
-		pickQuestionsDeterministic(sdQuestions, countSD, seedBytes[0])
-		pickQuestionsDeterministic(smpQuestions, countSMP, seedBytes[1])
-		pickQuestionsDeterministic(smaQuestions, countSMA, seedBytes[2])
+		pickQuestionsDeterministic(sdQuestions, countSD, 0x11)
+		pickQuestionsDeterministic(smpQuestions, countSMP, 0x22)
+		pickQuestionsDeterministic(smaQuestions, countSMA, 0x33)
 
-		// Acak final urutan seluruh soal antar-tingkat menggunakan Fisher-Yates agar acak rata
+		// Acak final urutan seluruh soal antar-tingkat menggunakan Fisher-Yates per slot hash
+		h := sha256.New()
+		binary.Write(h, binary.BigEndian, slotID)
+		seedBytes := h.Sum(nil)
+
 		for i := len(slotQuestions) - 1; i > 0; i-- {
 			j := int(seedBytes[(i*7)%len(seedBytes)]) % (i + 1)
 			slotQuestions[i], slotQuestions[j] = slotQuestions[j], slotQuestions[i]
