@@ -515,7 +515,7 @@ func main() {
 				appID := os.Getenv("ONESIGNAL_APP_ID")
 				apiKey := os.Getenv("ONESIGNAL_API_KEY")
 				if appID == "" {
-					appID = "d30c5e7b-8bb7-4f65-8b36-9d0426b38466"
+					appID = "df0ede01-ed1f-47c0-b68f-e4eff0f080d8"
 				}
 				if apiKey != "" {
 					payload := map[string]interface{}{
