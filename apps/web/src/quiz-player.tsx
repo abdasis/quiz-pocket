@@ -55,6 +55,7 @@ export function QuizPlayer({
   slotId,
   categoryTitle,
   questions,
+  secondsRemainingSlot = 1800,
   isPracticeMode = false,
   streak = 1,
   onFinish,
@@ -130,8 +131,42 @@ export function QuizPlayer({
   const [showWarning, setShowWarning] = useState<string | null>(null)
   const [isDisqualified, setIsDisqualified] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
+  const [isSlotExpired, setIsSlotExpired] = useState(false)
   const isCompletedRef = useRef(false)
   isCompletedRef.current = isCompleted
+
+  // Watch Session Slot Deadline: Tutup otomatis jika waktu slot sesi 30m habis
+  useEffect(() => {
+    if (isPracticeMode || isCompleted || !secondsRemainingSlot || secondsRemainingSlot <= 0) return
+
+    const slotEndTime = Date.now() + secondsRemainingSlot * 1000
+
+    const slotInterval = setInterval(() => {
+      const timeLeft = Math.max(0, Math.ceil((slotEndTime - Date.now()) / 1000))
+      if (timeLeft <= 0) {
+        clearInterval(slotInterval)
+        if (!isCompletedRef.current) {
+          setIsCompleted(true)
+          setIsSlotExpired(true)
+          localStorage.removeItem(storageKey)
+          const maxPoints = questions.reduce((acc, q) => acc + (q.points || 10), 0)
+          onFinish(
+            score,
+            maxPoints,
+            correctCount,
+            sdStats.correct,
+            sdStats.total,
+            smpStats.correct,
+            smpStats.total,
+            smaStats.correct,
+            smaStats.total
+          )
+        }
+      }
+    }, 1000)
+
+    return () => clearInterval(slotInterval)
+  }, [secondsRemainingSlot, isPracticeMode, isCompleted, score, correctCount, sdStats, smpStats, smaStats, storageKey, questions, onFinish])
 
   const currentQ = (questions && questions.length > 0 && questions[currentIndex]) 
     ? questions[currentIndex] 
@@ -440,10 +475,16 @@ export function QuizPlayer({
 
           <div className="space-y-2 max-w-md mx-auto">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
-              {isPracticeMode ? 'Latihan Selesai!' : 'Sesi Kuis Selesai!'}
+              {isSlotExpired
+                ? 'Waktu Sesi Berakhir!'
+                : isPracticeMode
+                ? 'Latihan Selesai!'
+                : 'Sesi Kuis Selesai!'}
             </h2>
             <p className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed font-normal">
-              {isPracticeMode
+              {isSlotExpired
+                ? 'Waktu slot 30 menit telah habis. Nilai dan progres dari soal yang telah kamu selesaikan sudah otomatis tersimpan ke leaderboard.'
+                : isPracticeMode
                 ? 'Bagus sekali! Kamu telah melatih logika dan ingatanmu sambil menunggu rotasi kuis utama.'
                 : 'Hasil, poin kombo, dan riwayat akurasi kamu telah berhasil dicatat ke sistem dan leaderboard secara valid.'}
             </p>
