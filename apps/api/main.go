@@ -167,6 +167,63 @@ func getLevelPermutation(totalQuestions int, cycle int64, seedOffset byte) []int
 	return perm
 }
 
+// getSlotQuestionCounts menentukan jumlah soal (10, 15, atau 20) per slotID secara deterministik.
+// Aturan: Jumlah soal yang sama maksimal muncul berturut-turut sebanyak 3 kali (run <= 3).
+func getSlotQuestionCounts(slotID int64) (countSD, countSMP, countSMA int) {
+	// Chunk window: 512 slot per block agar instan dihitung tanpa loop dari slot 0
+	baseSlot := (slotID / 512) * 512
+	options := []int{10, 15, 20}
+
+	lastCount := -1
+	runLength := 0
+	chosenCount := 10
+
+	for s := baseSlot; s <= slotID; s++ {
+		h := sha256.New()
+		binary.Write(h, binary.BigEndian, s)
+		binary.Write(h, binary.BigEndian, uint64(0x9876543210ABCDEF))
+		seed := h.Sum(nil)
+		pickIdx := int(seed[0]) % len(options)
+		candidate := options[pickIdx]
+
+		if candidate == lastCount {
+			if runLength >= 3 {
+				// Paksa ganti ke salah satu opsi yang berbeda
+				altOptions := make([]int, 0, 2)
+				for _, opt := range options {
+					if opt != candidate {
+						altOptions = append(altOptions, opt)
+					}
+				}
+				candidate = altOptions[int(seed[1])%len(altOptions)]
+				runLength = 1
+			} else {
+				runLength++
+			}
+		} else {
+			runLength = 1
+		}
+
+		lastCount = candidate
+		if s == slotID {
+			chosenCount = candidate
+		}
+	}
+
+	// Distribusi 40% SD, 40% SMP, 20% SMA:
+	// - 10 Soal: 4 SD, 4 SMP, 2 SMA
+	// - 15 Soal: 6 SD, 6 SMP, 3 SMA
+	// - 20 Soal: 8 SD, 8 SMP, 4 SMA
+	switch chosenCount {
+	case 15:
+		return 6, 6, 3
+	case 20:
+		return 8, 8, 4
+	default:
+		return 4, 4, 2
+	}
+}
+
 // Helper untuk mengambil soal dari sesi aktif 30 menit
 func getLiveSlotQuestions(db *gorm.DB) []Question {
 	const slotDurationSec int64 = 1800
@@ -182,8 +239,8 @@ func getLiveSlotQuestions(db *gorm.DB) []Question {
 		}
 	}
 
-	// Dynamic Question Count: Kunci 10 butir per slot (4 SD, 4 SMP, 2 SMA)
-	countSD, countSMP, countSMA := 4, 4, 2
+	// Dynamic Question Count: 10, 15, atau 20 butir (maksimal 3 kali berturut-turut sama)
+	countSD, countSMP, countSMA := getSlotQuestionCounts(slotID)
 
 	var sdQuestions, smpQuestions, smaQuestions []Question
 	db.Where("level = ?", "SD").Order("id ASC").Find(&sdQuestions)
@@ -437,8 +494,8 @@ func main() {
 		catIndex := int(slotID % int64(len(categories)))
 		activeCategory := categories[catIndex]
 
-		// Komposisi Soal: 4 SD, 4 SMP, 2 SMA (Total 10 soal per slot)
-		countSD, countSMP, countSMA := 4, 4, 2
+		// Komposisi Soal Dinamis (10, 15, 20): maks 3 kali beruntun sama
+		countSD, countSMP, countSMA := getSlotQuestionCounts(slotID)
 
 		var sdQuestions, smpQuestions, smaQuestions []Question
 		db.Where("level = ?", "SD").Order("id ASC").Find(&sdQuestions)
