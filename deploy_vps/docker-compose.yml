@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: quiz-pocket-db
+    restart: always
+    environment:
+      POSTGRES_DB: quiz_pocket
+      POSTGRES_USER: quiz_user
+      POSTGRES_PASSWORD: 3d1da7358278234b1bfb08fa79ad8d64
+    volumes:
+      - quiz_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quiz_user -d quiz_pocket"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    container_name: quiz-pocket-app
+    restart: always
+    environment:
+      DATABASE_URL: postgres://quiz_user:3d1da7358278234b1bfb08fa79ad8d64@db:5432/quiz_pocket?sslmode=disable
+      PORT: "8089"
+      WEB_DIST_DIR: /app/web/dist
+    ports:
+      - "8089:8089"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  quiz_pgdata:

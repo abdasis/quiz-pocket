@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -302,7 +303,13 @@ func getISOWeekKey(t time.Time) string {
 }
 
 func main() {
-	dsn := "host=/var/run/postgresql dbname=quiz_pocket sslmode=disable"
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		dsn = os.Getenv("DB_DSN")
+	}
+	if dsn == "" {
+		dsn = "host=/var/run/postgresql dbname=quiz_pocket sslmode=disable"
+	}
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to Postgres: %v", err)
@@ -1070,8 +1077,13 @@ func main() {
 		})
 	})
 
+	webDistDir := os.Getenv("WEB_DIST_DIR")
+	if webDistDir == "" {
+		webDistDir = "/home/abdasis/Projects/quiz-pocket/apps/web/dist"
+	}
+
 	// Static Downloads Serving (Direct APK Downloads)
-	app.Static("/downloads", "/home/abdasis/Projects/quiz-pocket/apps/web/dist/downloads")
+	app.Static("/downloads", filepath.Join(webDistDir, "downloads"))
 
 	// Dynamic SEO Sitemap XML Endpoint
 	app.Get("/sitemap.xml", func(c *fiber.Ctx) error {
@@ -1108,15 +1120,15 @@ func main() {
 	})
 
 	// Static Web Frontend & Assets Serving
-	app.Static("/assets", "/home/abdasis/Projects/quiz-pocket/apps/web/dist/assets")
-	app.Static("/article-images", "/home/abdasis/Projects/quiz-pocket/apps/web/dist/article-images")
-	app.Static("/robots.txt", "/home/abdasis/Projects/quiz-pocket/apps/web/dist/robots.txt")
+	app.Static("/assets", filepath.Join(webDistDir, "assets"))
+	app.Static("/article-images", filepath.Join(webDistDir, "article-images"))
+	app.Static("/robots.txt", filepath.Join(webDistDir, "robots.txt"))
 	app.Get("/*", func(c *fiber.Ctx) error {
 		path := c.Path()
 		if len(path) >= 4 && path[:4] == "/api" {
 			return c.Status(404).JSON(fiber.Map{"error": "Endpoint not found"})
 		}
-		return c.SendFile("/home/abdasis/Projects/quiz-pocket/apps/web/dist/index.html")
+		return c.SendFile(filepath.Join(webDistDir, "index.html"))
 	})
 
 	port := os.Getenv("PORT")
